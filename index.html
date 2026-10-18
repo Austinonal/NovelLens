@@ -428,24 +428,25 @@ function arc(text, parts = 6){
 // ===== Input integrity guard: don't mistake protected-font glyphs for readable prose =====
 function inspectTextQuality(raw){
   const text=String(raw||"").trim();
-  const size=[...text].length||1;
-  const pua=(text.match(/[\uE000-\uF8FF]/g)||[]).length;
+  const chars=[...text], size=chars.length||1;
+  const pua=(text.match(/[\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]/gu)||[]).length;
   const replacement=(text.match(/\uFFFD/g)||[]).length;
   const controls=(text.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g)||[]).length;
   const thai=(text.match(/[\u0E00-\u0E7F]/g)||[]).length;
-  const puaRatio=pua/size, replacementRatio=replacement/size;
-  const protectedFont=pua>=8 && puaRatio>=0.008;
+  const zeroWidth=(text.match(/[\u200B-\u200F\u2060\uFEFF]/g)||[]).length;
+  const visibleLetter=(text.match(/[\p{L}\p{N}]/gu)||[]).length;
+  const puaRatio=pua/size, replacementRatio=replacement/size, zeroWidthRatio=zeroWidth/size;
+  // A few unusual characters may be legitimate. These combined signals indicate a broken or obfuscated text layer.
+  const protectedFont=(pua>=5 && puaRatio>=0.003) || (pua>=3 && puaRatio>=0.02);
   const damagedEncoding=(replacement>=3 && replacementRatio>=0.002) || controls>=4;
-  let reason="";
-  if(protectedFont) reason="พบอักขระในช่วง Private Use Area จำนวน "+pua.toLocaleString()+" ตัว ซึ่งมักเป็นสัญญาณว่าหน้าเว็บใช้ฟอนต์แทนอักขระจริง ข้อความที่ดึงจาก DOM จึงไม่ใช่ภาษาไทยที่อ่านได้โดยตรง";
-  else if(damagedEncoding) reason="พบอักขระทดแทนหรือ control characters จำนวนมาก ข้อความอาจเสียหายระหว่างคัดลอกหรือถอดรหัส";
-  return {
-    ok:!protectedFont&&!damagedEncoding,
-    size,pua,replacement,controls,thai,
-    puaRatio,replacementRatio,
-    issue:protectedFont?"protected-font":damagedEncoding?"encoding-damage":"",
-    message:reason
-  };
+  const suspiciousText=(size>=120 && visibleLetter/size<0.42 && pua+replacement+controls>=4);
+  const excessiveInvisible=(size>=120 && zeroWidth>=12 && zeroWidthRatio>=0.025);
+  let issue="",reason="";
+  if(protectedFont){issue="protected-font";reason="พบอักขระ Private Use Area "+pua.toLocaleString()+" ตัว ("+(puaRatio*100).toFixed(1)+"%) ข้อความจาก DOM อาจเป็นรหัสฟอนต์ ไม่ใช่ภาษาไทยจริง";}
+  else if(damagedEncoding){issue="encoding-damage";reason="พบอักขระทดแทนหรือ control characters มากผิดปกติ ข้อความอาจเสียหายระหว่างคัดลอก";}
+  else if(excessiveInvisible){issue="invisible-characters";reason="พบอักขระ zero-width จำนวนมากผิดปกติ ข้อความอาจถูกแปลงรูปแบบหรือคัดลอกมาไม่สมบูรณ์";}
+  else if(suspiciousText){issue="suspicious-text";reason="สัดส่วนตัวอักษรที่อ่านได้ต่ำผิดปกติเมื่อเทียบกับความยาวข้อความ จึงไม่มั่นใจว่าเป็นต้นฉบับที่สะอาด";}
+  return {ok:!issue,size,pua,replacement,controls,thai,zeroWidth,visibleLetter,puaRatio,replacementRatio,zeroWidthRatio,issue,message:reason};
 }
 
 function classifyEvidence(evidence){
