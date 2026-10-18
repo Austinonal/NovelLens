@@ -34,6 +34,14 @@ for (const genre of Object.keys(api.PLOTS)) for (const structure of Object.keys(
 }
 assert.equal(api.generate({chars: [{}], plot: {}}), null, "needs at least one named character");
 
+// ReadAWrite importer UI and local-only storage contract
+assert(html.includes('id="t-import"') && html.includes('id="p-import"'), "ReadAWrite library tab and panel exist");
+assert(html.includes("novellens.readawrite.imports.v1"), "imports persist in browser-local storage");
+assert(html.includes("saveReadAWriteImport") && html.includes("sourceUrl:location.href"), "bookmarklet sends source metadata for chapter imports");
+assert(html.includes("data-rw-analyze") && html.includes("data-rw-delete"), "saved chapters can be analyzed and deleted");
+assert(html.includes("ReadAWrite") && html.includes("ไม่สามารถอ่านหน้า ReadAWrite ข้ามโดเมน"), "cross-origin limitation is explained in the UI");
+const importerMatch = html.match(/\/\/ ===== ReadAWrite local library[\s\S]*?(?=for \(const \[tab, panel\])/);
+assert(importerMatch && !/fetch\(|XMLHttpRequest|WebSocket|EventSource|sendBeacon|api[_-]?key/i.test(importerMatch[0]), "ReadAWrite importer does not call network or AI APIs");
 // ===== Procedural engine =====
 assert(!/fetch\(|XMLHttpRequest|WebSocket|EventSource|sendBeacon|import\(|api[_-]?key/i.test(studio), "studio script has no network or AI-provider code");
 assert.deepEqual(html.match(/https?:\/\/[^"'`\s)]+/g).filter(u => !u.startsWith("https://fonts.googleapis.com")), [], "the only remote resource is the font stylesheet");

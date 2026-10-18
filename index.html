@@ -181,6 +181,24 @@ summary::marker{color:var(--pen)}
 .beat p{max-width:none;margin:0;font-family:var(--serif);line-height:1.8}
 .beat p[contenteditable]:hover{background:color-mix(in srgb,var(--hl) 35%,transparent)}
 .copyout{min-height:120px;margin-top:8px}
+
+/* ReadAWrite import desk */
+.rw-panel{max-width:1000px;margin:0 auto;display:grid;gap:22px}
+.rw-card{background:var(--paper);border:1px solid var(--rule2);border-radius:5px;padding:clamp(18px,3vw,30px);box-shadow:var(--lift);min-width:0}
+.rw-card h2{font-family:var(--serif);margin:0 0 8px;font-size:clamp(21px,3vw,28px)}
+.rw-input{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+.rw-input input{flex:1;min-width:min(100%,260px);padding:11px 12px;border:1px solid var(--rule2);border-radius:7px;background:var(--desk);color:var(--ink);font:inherit}
+.rw-status{min-height:1.5em;color:var(--pen);font-size:14px}
+.rw-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.rw-stat{background:var(--desk);border:1px solid var(--rule);padding:12px;border-radius:5px}
+.rw-stat b{display:block;font-family:var(--serif);font-size:24px}
+.rw-list{display:grid;gap:10px;margin-top:14px}
+.rw-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:14px;background:var(--desk);border:1px solid var(--rule2);border-radius:5px}
+.rw-item h3{margin:0;font-family:var(--serif);font-size:17px;overflow-wrap:anywhere}
+.rw-item p{margin:3px 0;color:var(--pencil);font-size:13px;overflow-wrap:anywhere}
+.rw-empty{border:1px dashed var(--rule2);padding:22px;text-align:center;color:var(--pencil)}
+@media(max-width:620px){.rw-stats{grid-template-columns:1fr}.rw-item{grid-template-columns:1fr}.rw-item .row{justify-content:flex-start}}
+
 </style>
 </head>
 <body>
@@ -189,6 +207,7 @@ summary::marker{color:var(--pen)}
   <div class="tabs" role="tablist">
     <button role="tab" id="t-analyze" aria-selected="true">แกะนิยาย</button>
     <button role="tab" id="t-studio" aria-selected="false">สร้างตัวละครและพล็อต</button>
+    <button role="tab" id="t-import" aria-selected="false">คลัง ReadAWrite</button>
   </div>
 </nav>
 
@@ -259,6 +278,29 @@ summary::marker{color:var(--pen)}
       </div>
     </div>
     <div id="story"></div>
+  </div>
+
+  <div id="p-import" class="rw-panel" hidden>
+    <section class="rw-card">
+      <span class="tag">READAWRITE · LOCAL IMPORT</span>
+      <h2>นำเรื่องและตอนเข้าคลังวิเคราะห์</h2>
+      <p>วางลิงก์ ReadAWrite เพื่อเปิดหน้าต้นทาง แล้วใช้ปุ่มบุ๊กมาร์ก “ดึงเข้าห้องแกะนิยาย” จากหน้าตอนที่คุณมีสิทธิ์อ่าน เนื้อหาจะถูกเก็บในเบราว์เซอร์เครื่องนี้เท่านั้น ไม่มี AI/API และไม่มีการส่งต้นฉบับออกไป</p>
+      <div class="rw-input">
+        <input id="rw-url" type="url" inputmode="url" placeholder="https://www.readawrite.com/a/..." aria-label="ลิงก์ ReadAWrite">
+        <button id="rw-check" type="button">ตรวจรูปแบบลิงก์</button>
+        <button id="rw-open" class="ghost" type="button">เปิด ReadAWrite</button>
+      </div>
+      <p class="note">ข้อจำกัดสำคัญ: เว็บที่โฮสต์บน GitHub Pages ไม่สามารถอ่านหน้า ReadAWrite ข้ามโดเมนได้เองเพราะนโยบายเบราว์เซอร์ จึงไม่สามารถไล่ทุกตอนจากลิงก์เดียวโดยอัตโนมัติในเวอร์ชันเว็บสแตติกนี้ได้ ให้เปิดแต่ละตอนแล้วกด bookmarklet เพื่อเก็บตอนลงคลัง หากเป็นเรื่องของคุณเองหรือได้รับอนุญาตให้นำเข้าเท่านั้น</p>
+      <div id="rw-status" class="rw-status" role="status" aria-live="polite"></div>
+    </section>
+    <section class="rw-card">
+      <div class="row" style="justify-content:space-between">
+        <div><span class="tag">LOCAL LIBRARY</span><h2>คลังเรื่องที่นำเข้า</h2></div>
+        <div class="row"><button id="rw-export" class="ghost" type="button">ส่งออก JSON</button><button id="rw-clear" class="ghost" type="button">ล้างคลัง</button></div>
+      </div>
+      <div id="rw-stats" class="rw-stats"></div>
+      <div id="rw-library" class="rw-list"></div>
+    </section>
   </div>
 </main>
 
@@ -546,7 +588,7 @@ const updateCount = () => $("count").textContent = src.value.length.toLocaleStri
 src.addEventListener("input", updateCount);
 
 // --- Receive chapter text from the bookmarklet ---
-const BOOKMARKLET = app => `javascript:(()=>{const APP=${JSON.stringify(app)};let t=String(getSelection()).trim();if(t.length<200){const m=new Map();document.querySelectorAll('p').forEach(p=>{const k=p.parentElement;m.set(k,(m.get(k)||0)+p.innerText.trim().length)});let b=null,n=0;m.forEach((v,k)=>{if(v>n){n=v;b=k}});if(!b||n<=200){alert('ไม่พบเนื้อเรื่องเป็นข้อความบนหน้านี้ ถ้าเว็บมีโหมดอ่านแบบ html ให้สลับไปโหมดนั้น หรือลากคลุมเนื้อเรื่องแล้วกดใหม่');return}t=b.innerText.trim()}const w=window.open(APP,'_blank');const o=new URL(APP).origin;addEventListener('message',function f(e){if(e.source===w&&e.origin===o&&e.data==='novel-ready'){w.postMessage({type:'novel-text',text:t,title:document.title},o);removeEventListener('message',f)}})})()`;
+const BOOKMARKLET = app => `javascript:(()=>{const APP=${JSON.stringify(app)};let t=String(getSelection()).trim();if(t.length<200){const m=new Map();document.querySelectorAll('p').forEach(p=>{const k=p.parentElement;m.set(k,(m.get(k)||0)+p.innerText.trim().length)});let b=null,n=0;m.forEach((v,k)=>{if(v>n){n=v;b=k}});if(!b||n<=200){alert('ไม่พบเนื้อเรื่องเป็นข้อความบนหน้านี้ ถ้าเว็บมีโหมดอ่านแบบ html ให้สลับไปโหมดนั้น หรือลากคลุมเนื้อเรื่องแล้วกดใหม่');return}t=b.innerText.trim()}const host=location.hostname;const links=[...document.querySelectorAll('a[href]')].filter(a=>/readawrite\\.com$/.test(new URL(a.href,location.href).hostname)&&/\\/a\\//.test(new URL(a.href,location.href).pathname));const storyLink=links.find(a=>a.href!==location.href&&!/ตอนที่|chapter|episode/i.test(a.innerText))?.href||location.href;const title=document.querySelector('h1')?.innerText.trim()||document.querySelector('meta[property="og:title"]')?.content||document.title;const w=window.open(APP,'_blank');const o=new URL(APP).origin;addEventListener('message',function f(e){if(e.source===w&&e.origin===o&&e.data==='novel-ready'){w.postMessage({type:'novel-text',text:t,title:document.title,chapterTitle:title,sourceUrl:location.href,storyUrl:storyLink,sourceHost:host},o);removeEventListener('message',f)}})})()`;
 $("bm").href = BOOKMARKLET(location.href.split("#")[0]);
 $("bm").onclick = e => { e.preventDefault(); status.textContent = "ลากปุ่มนี้ไปไว้ที่แถบบุ๊กมาร์ก แล้วไปกดที่หน้าตอนนิยาย"; };
 addEventListener("message", e => {
@@ -554,6 +596,14 @@ addEventListener("message", e => {
   src.value = String(e.data.text || ""); updateCount();
   status.textContent = "ดึงมาแล้ว: " + String(e.data.title || "").slice(0, 80);
   isExample = false; run();
+  if (typeof saveReadAWriteImport === "function") {
+    const item = saveReadAWriteImport(e.data);
+    if (item) {
+      const rwStatus = document.getElementById("rw-status");
+      if (rwStatus) rwStatus.textContent = "เก็บตอนในคลังแล้ว: " + item.chapterTitle + " · " + item.text.length.toLocaleString() + " ตัวอักษร";
+      if (typeof renderReadAWriteLibrary === "function") renderReadAWriteLibrary();
+    }
+  }
 });
 if (window.opener) window.opener.postMessage("novel-ready", "*");
 
@@ -1153,8 +1203,62 @@ function renderStory(s){
     el("div", {class: "row"}, reroll, copy)].filter(Boolean));
 }
 
-for (const [tab, panel] of [["t-analyze", "p-analyze"], ["t-studio", "p-studio"]]) $(tab).onclick = () => {
-  for (const [t, p] of [["t-analyze", "p-analyze"], ["t-studio", "p-studio"]]) { $(t).setAttribute("aria-selected", String(t === tab)); $(p).hidden = p !== panel; }
+
+// ===== ReadAWrite local library: no API, no remote text processing =====
+const RW_IMPORT_KEY = "novellens.readawrite.imports.v1";
+const rwGet = id => document.getElementById(id);
+const readAWriteItems = () => { try { const x = JSON.parse(localStorage.getItem(RW_IMPORT_KEY) || "[]"); return Array.isArray(x) ? x : []; } catch { return []; } };
+const rwEscape = s => String(s || "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function saveReadAWriteImport(data) {
+  const text = String(data.text || "").trim();
+  const sourceUrl = String(data.sourceUrl || "");
+  if (text.length < 80 || !/^https?:\/\/(?:[^/]+\.)?readawrite\.com\//i.test(sourceUrl)) return null;
+  const items = readAWriteItems();
+  const old = items.find(x => x.sourceUrl === sourceUrl);
+  const item = {
+    id: old?.id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 8)),
+    sourceUrl, storyUrl: String(data.storyUrl || sourceUrl), pageTitle: String(data.title || ""),
+    chapterTitle: String(data.chapterTitle || data.title || "ตอนที่ไม่ทราบชื่อ"),
+    text, chars: text.length, updatedAt: new Date().toISOString()
+  };
+  const next = old ? items.map(x => x.id === old.id ? item : x) : [item, ...items];
+  try { localStorage.setItem(RW_IMPORT_KEY, JSON.stringify(next)); return item; }
+  catch { const status = rwGet("rw-status"); if (status) status.textContent = "พื้นที่จัดเก็บเบราว์เซอร์เต็ม กรุณาส่งออกหรือลบตอนเก่าก่อน"; return null; }
+}
+function renderReadAWriteLibrary() {
+  const items = readAWriteItems(), list = rwGet("rw-library"), stats = rwGet("rw-stats");
+  if (!list || !stats) return;
+  const stories = new Set(items.map(x => x.storyUrl || x.sourceUrl));
+  stats.innerHTML = '<div class="rw-stat"><span>เรื่องที่พบ</span><b>' + stories.size + '</b></div><div class="rw-stat"><span>ตอนที่เก็บไว้</span><b>' + items.length + '</b></div><div class="rw-stat"><span>ตัวอักษรรวม</span><b>' + items.reduce((n,x)=>n+(x.text||"").length,0).toLocaleString() + '</b></div>';
+  if (!items.length) { list.innerHTML = '<div class="rw-empty">ยังไม่มีตอนในคลัง เปิดหน้าตอน ReadAWrite แล้วกด bookmarklet “ดึงเข้าห้องแกะนิยาย” เพื่อเพิ่มตอน</div>'; return; }
+  list.innerHTML = items.map(x => '<article class="rw-item"><div><h3>' + rwEscape(x.chapterTitle) + '</h3><p>' + rwEscape(x.storyUrl) + '</p><p>' + (x.text||"").length.toLocaleString() + ' ตัวอักษร · นำเข้าล่าสุด ' + rwEscape(new Date(x.updatedAt).toLocaleString()) + '</p></div><div class="row"><button type="button" data-rw-analyze="' + rwEscape(x.id) + '">วิเคราะห์ตอน</button><button type="button" class="ghost" data-rw-open="' + rwEscape(x.id) + '">เปิดต้นทาง</button><button type="button" class="ghost" data-rw-delete="' + rwEscape(x.id) + '">ลบ</button></div></article>').join("");
+  list.querySelectorAll("[data-rw-analyze]").forEach(b => b.onclick = () => { const x = readAWriteItems().find(i => i.id === b.dataset.rwAnalyze); if (!x) return; src.value = x.text; updateCount(); isExample = false; run(); $("t-analyze").click(); $("work").scrollIntoView({behavior:"smooth"}); });
+  list.querySelectorAll("[data-rw-open]").forEach(b => b.onclick = () => { const x = readAWriteItems().find(i => i.id === b.dataset.rwOpen); if (x) window.open(x.sourceUrl, "_blank", "noopener"); });
+  list.querySelectorAll("[data-rw-delete]").forEach(b => b.onclick = () => { const x = readAWriteItems().find(i => i.id === b.dataset.rwDelete); if (x && confirm('ลบตอน "' + x.chapterTitle + '" ออกจากคลังในเบราว์เซอร์นี้หรือไม่?')) { localStorage.setItem(RW_IMPORT_KEY, JSON.stringify(readAWriteItems().filter(i => i.id !== x.id))); renderReadAWriteLibrary(); } });
+}
+rwGet("rw-check").onclick = () => {
+  const raw = rwGet("rw-url").value.trim(), status = rwGet("rw-status");
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "https:" || !/(^|\.)readawrite\.com$/i.test(u.hostname)) throw new Error("โดเมนไม่ใช่ ReadAWrite");
+    status.textContent = "รูปแบบลิงก์ถูกต้องและอยู่บนโดเมน ReadAWrite แต่ยังยืนยันไม่ได้ว่าเป็นหน้ารวมเรื่องหรือตอนจนกว่าจะเปิดหน้าเว็บจริง";
+  } catch { status.textContent = "ลิงก์ไม่ถูกต้อง กรุณาใช้ URL https:// ของ readawrite.com"; }
+};
+rwGet("rw-open").onclick = () => {
+  const raw = rwGet("rw-url").value.trim(), status = rwGet("rw-status");
+  try { const u = new URL(raw); if (u.protocol !== "https:" || !/(^|\.)readawrite\.com$/i.test(u.hostname)) throw new Error(); window.open(u.href, "_blank", "noopener"); status.textContent = "เปิดหน้าต้นทางแล้ว หากเป็นหน้ารวมเรื่องให้เปิดแต่ละตอนที่ต้องการนำเข้าแล้วกด bookmarklet"; }
+  catch { status.textContent = "กรุณาวาง URL https:// ที่อยู่บน readawrite.com ก่อน"; }
+};
+rwGet("rw-export").onclick = () => {
+  const items = readAWriteItems(); if (!items.length) { rwGet("rw-status").textContent = "ยังไม่มีข้อมูลให้ส่งออก"; return; }
+  const blob = new Blob([JSON.stringify({format:"NovelLens ReadAWrite local library",version:1,exportedAt:new Date().toISOString(),items},null,2)], {type:"application/json"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "novellens-readawrite-library.json"; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+};
+rwGet("rw-clear").onclick = () => { if (readAWriteItems().length && confirm("ลบตอนทั้งหมดจากคลังในเบราว์เซอร์นี้หรือไม่? แนะนำให้ส่งออก JSON ก่อน")) { localStorage.removeItem(RW_IMPORT_KEY); renderReadAWriteLibrary(); rwGet("rw-status").textContent = "ล้างคลังแล้ว"; } };
+renderReadAWriteLibrary();
+
+for (const [tab, panel] of [["t-analyze", "p-analyze"], ["t-studio", "p-studio"], ["t-import", "p-import"]]) $(tab).onclick = () => {
+  for (const [t, p] of [["t-analyze", "p-analyze"], ["t-studio", "p-studio"], ["t-import", "p-import"]]) { $(t).setAttribute("aria-selected", String(t === tab)); $(p).hidden = p !== panel; }
 };
 for (const a of document.querySelectorAll("[data-tab]")) a.addEventListener("click", () => $(a.dataset.tab).click());
 renderChar(); renderPlot(); if (lastStory) renderStory(lastStory);
