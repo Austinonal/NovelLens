@@ -326,6 +326,34 @@ const FEELS = {
   "ตลก": "หัวเราะ ฮา ขำ ตลก แซว 555 ฮ่าๆ กวนประสาท บ้าบอ เอ๋อ ขำขัน มุก ปั่นหัว ฮาก๊าก"
 };
 const GENRE = {"รัก/ละมุน":"โรแมนซ์","เศร้า":"ดราม่า","เหงา/สงบ":"ดราม่าชีวิต","ลึกลับ":"ลึกลับ/สืบสวน","น่ากลัว":"สยองขวัญ","แอ็กชัน/แฟนตาซี":"แอ็กชัน/แฟนตาซี","ตลก":"คอมเมดี้"};
+const GENRE_CLUES = {
+  "โรแมนซ์": ["รัก","ตกหลุมรัก","ชอบเธอ","ชอบเขา","แฟน","คนรัก","คู่หมั้น","แต่งงาน","สารภาพรัก","หึง","เดต","จูบ","ความสัมพันธ์","หัวใจเต้น","รักแรก"],
+  "ดราม่า": ["เสียใจ","สูญเสีย","ครอบครัว","แตกสลาย","หย่าร้าง","ความทรงจำ","อดีต","ให้อภัย","ความผิด","เจ็บปวด","น้ำตา","จากลา","ความลับในครอบครัว"],
+  "ลึกลับ/สืบสวน": ["ปริศนา","สืบสวน","นักสืบ","เบาะแส","หลักฐาน","ผู้ต้องสงสัย","ฆาตกรรม","ฆาตกร","ศพ","คดี","หายตัว","ร่องรอย","สอบสวน","ไขคดี","ความจริง"],
+  "สยองขวัญ": ["ผี","วิญญาณ","ปีศาจ","คำสาป","หลอน","สยอง","ขนลุก","บ้านร้าง","อาถรรพ์","เลือด","ศพ","เสียงประหลาด","เงาดำ","ถูกสิง"],
+  "แฟนตาซี": ["เวทมนตร์","เวทมนต์","พลังวิเศษ","มังกร","เอลฟ์","อาณาจักร","คำสาป","ผู้กล้า","แม่มด","พ่อมด","เผ่าพันธุ์","ต่างโลก","เวท","ดันเจี้ยน","เทพเจ้า"],
+  "แอ็กชัน": ["ต่อสู้","ไล่ล่า","ยิงปืน","ระเบิด","ดาบ","สงคราม","โจมตี","หนีตาย","บุก","ปะทะ","ภารกิจ","นักฆ่า","บอดี้การ์ด","อาวุธ"],
+  "คอมเมดี้": ["ตลก","ขำ","หัวเราะ","มุก","กวนประสาท","ฮา","ขายขำ","โป๊ะ","ปั่นประสาท","วุ่นวาย","555","ฮ่าๆ"],
+  "ชีวิตประจำวัน": ["ชีวิตประจำวัน","โรงเรียน","มหาวิทยาลัย","ห้องเรียน","เพื่อนสนิท","ทำงาน","ร้านกาแฟ","หอพัก","ชีวิตวัยรุ่น","กิจวัตร","เพื่อนร่วมงาน"],
+  "อาชญากรรม": ["มาเฟีย","องค์กรอาชญากรรม","แก๊ง","ฟอกเงิน","ปล้น","ค้ายา","ตำรวจ","อาชญากรรม","มือปืน","เจ้าพ่อ","ใต้ดิน","อิทธิพลมืด"],
+  "ไซไฟ": ["หุ่นยนต์","ปัญญาประดิษฐ์","AI","จักรวาล","อวกาศ","ยานอวกาศ","เดินทางข้ามเวลา","โลกอนาคต","ไซบอร์ก","เทคโนโลยี","ทดลอง","มิติ"],
+  "ย้อนยุค/ประวัติศาสตร์": ["ย้อนยุค","ราชวงศ์","กษัตริย์","ขุนนาง","วังหลวง","ยุคโบราณ","ประวัติศาสตร์","สงครามโลก","สมัยก่อน","เจ้าหญิง","องค์ชาย","บรรดาศักดิ์"]
+};
+function classifyGenres(text){
+  const normalized=String(text||"").replace(/\\s+/g," ");
+  const rows=Object.entries(GENRE_CLUES).map(([genre,terms])=>{
+    const evidence=terms.map(term=>({term,hits:count(normalized,term)})).filter(x=>x.hits>0)
+      .sort((a,b)=>b.hits-a.hits).slice(0,6);
+    const raw=evidence.reduce((n,x)=>n+x.hits*(x.term.length>=5?2:1),0);
+    const distinct=evidence.length;
+    return {genre,score:raw,distinct,evidence};
+  }).filter(x=>x.score>0).sort((a,b)=>b.score-a.score);
+  const best=rows[0], second=rows[1];
+  if(!best) return {label:"ยังระบุแนวไม่ได้",confidence:"ไม่มีหลักฐาน",detail:"ไม่พบคำชี้เฉพาะจากรายการคำแนวเรื่อง ระบบจะไม่เดาแนวจากความรู้สึกอย่างเดียว",matches:[],evidence:[]};
+  const confidence=best.distinct>=3 && best.score>=6 && best.score>=(second?.score||0)*1.25 ? "มีหลักฐานคำค่อนข้างชัด"
+    : best.distinct>=2 && best.score>=3 ? "มีแนวโน้ม แต่ควรตรวจทาน" : "หลักฐานน้อย";
+  return {label:best.genre,confidence,detail:"ประเมินจากคำชี้เฉพาะในข้อความ ไม่ได้เข้าใจพล็อตเชิงความหมายเต็มรูปแบบ",matches:rows.slice(0,3),evidence:best.evidence};
+}
 const TIPS = {
   "รัก/ละมุน":{p:"ให้ความรู้สึกโตขึ้นทีละนิดผ่านการกระทำเล็กๆ (สบตา ยื่นของ) มากกว่าการสารภาพตรงๆ",c:"ให้คู่หลักมีจุดที่ขัดกันชัดๆ หนึ่งเรื่อง ความสัมพันธ์จะมีแรงดึง",a:"อย่าให้ตัวละครพูดว่ารักเร็วเกินไป"},
   "เศร้า":{p:"ปล่อยให้สิ่งของหรือฉากแทนความเศร้า ไม่ต้องบอกว่าเศร้า",c:"ให้ตัวละครมีสิ่งที่เสียไปชัดเจน และสิ่งที่ยังยึดไว้",a:"อย่าบรรยายการร้องไห้ยาวหลายย่อหน้า"},
@@ -491,6 +519,7 @@ function analyze(raw){
     feel: feelScores(text),
     evidence: feelEvidence(text),
     genreEvidence: classifyEvidence(feelEvidence(text)),
+    genreAnalysis: classifyGenres(text),
     opens: /^["“‘]/.test(paras[0] || "") ? "บทพูด" : "บรรยาย",
     ends: /[?…]|\.\.\.|['’]$/.test((paras.at(-1) || "").slice(-3)) ? "ทิ้งคำถาม/ค้างไว้" : /["”]$/.test(paras.at(-1) || "") ? "บทพูด" : "บรรยาย",
     words,
@@ -561,6 +590,18 @@ const SAMPLE_TEXT = `ฝนตกตั้งแต่บ่ายสาม แ�
 const $ = id => document.getElementById(id);
 const src = $("src"), report = $("report"), status = $("status");
 let ref = null, isExample = true;
+const ANALYSIS_SESSION_KEY = "novellens.analysis.session.v1";
+function saveAnalysisSession(text){
+  try {
+    const value=String(text||"");
+    if(value.trim() && inspectTextQuality(value).ok) localStorage.setItem(ANALYSIS_SESSION_KEY,JSON.stringify({text:value,updatedAt:new Date().toISOString()}));
+    else localStorage.removeItem(ANALYSIS_SESSION_KEY);
+  } catch(_) {}
+}
+function restoreAnalysisSession(){
+  try { const value=JSON.parse(localStorage.getItem(ANALYSIS_SESSION_KEY)||"null"); return value && typeof value.text==="string" && inspectTextQuality(value.text).ok ? value : null; }
+  catch(_) { return null; }
+}
 
 function el(tag, attrs = {}, ...kids){
   const n = document.createElement(tag);
@@ -577,7 +618,9 @@ function render(a){
   report.replaceChildren(
     el("div", {},
       el("span", {class:"tag"}, isExample ? "ตัวอย่าง: ผลวิเคราะห์ของข้อความตัวอย่าง" : "ผลวิเคราะห์"),
-      el("div", {class:"genre"}, feels.length ? feels.slice(0, 2).map(([k]) => GENRE[k]).join(" + ") : "ยังจับแนวไม่ได้"),
+      el("div", {class:"genre"}, a.genreAnalysis?.label || (feels.length ? feels.slice(0, 2).map(([k]) => GENRE[k]).join(" + ") : "ยังจับแนวไม่ได้")),
+      el("p", {class:"note"}, "แนวจากคำชี้เฉพาะ: " + (a.genreAnalysis?.confidence || "ระบบเดิม") + " — " + (a.genreAnalysis?.detail || "ระบบเทียบคำสำคัญ")),
+      a.genreAnalysis?.evidence?.length ? el("p", {class:"note"}, "หลักฐาน: " + a.genreAnalysis.evidence.map(x => x.term + " ×" + x.hits).join(" · ")) : null,
       el("p", {class:"note"}, "ประเมินจากคำที่ใช้ " + a.chars.toLocaleString() + " ตัวอักษร " + a.paraCount + " ย่อหน้า" + (a.chars < 800 ? " · ข้อความสั้น ผลอาจคลาดเคลื่อน" : ""))),
     sec("ประโยคที่คัดมาเป็นร่างเรื่องย่อ (ไม่ใช่การสรุปความหมายโดยตรง)", a.summary.length ? el("ol", {class:"summary"}, a.summary.map(s => el("li", {}, s))) : el("p", {class:"note"}, "ข้อความสั้นเกินไป")),
     sec("หลักฐานที่ใช้จับโทน", a.evidence?.length
@@ -660,12 +703,12 @@ function run(){
   if (!text) { status.textContent = "วางข้อความที่อ่านได้หรือเปิดไฟล์ต้นฉบับก่อน"; return; }
   const quality = inspectTextQuality(text);
   if (!quality.ok) { showQualityWarning(quality); return; }
-  ref = analyze(text); render(ref); status.textContent = "";
+  ref = analyze(text); render(ref); saveAnalysisSession(text); status.textContent = "";
 }
 $("go").onclick = () => { isExample = false; run(); };
-$("clear").onclick = () => { src.value = ""; src.focus(); updateCount(); report.replaceChildren(); status.textContent = ""; ref = null; };
+$("clear").onclick = () => { src.value = ""; try{localStorage.removeItem(ANALYSIS_SESSION_KEY);}catch(_){} src.focus(); updateCount(); report.replaceChildren(); status.textContent = ""; ref = null; };
 const updateCount = () => $("count").textContent = src.value.length.toLocaleString() + " ตัวอักษร";
-src.addEventListener("input", updateCount);
+src.addEventListener("input", () => { updateCount(); saveAnalysisSession(src.value); });
 $("file-import").addEventListener("change", async e => {
   const file = e.target.files?.[0];
   if (!file) return;
@@ -708,7 +751,9 @@ addEventListener("message", e => {
 });
 if (window.opener) window.opener.postMessage("novel-ready", "*");
 
-if (!window.opener) src.value = SAMPLE_TEXT;
+const savedAnalysisSession = restoreAnalysisSession();
+if (savedAnalysisSession) { src.value = savedAnalysisSession.text; isExample = false; status.textContent = "กู้คืนข้อความวิเคราะห์จากการใช้งานครั้งก่อนแล้ว"; }
+else if (!window.opener) src.value = SAMPLE_TEXT;
 updateCount(); run();
 </script>
 <script>
