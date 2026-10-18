@@ -309,7 +309,7 @@ summary::marker{color:var(--pen)}
         <div><span class="tag">LOCAL LIBRARY</span><h2>คลังเรื่องที่นำเข้า</h2></div>
         <div class="row"><button id="rw-merge-selected" class="ghost" type="button">รวมรายการที่เลือก</button><button id="rw-export" class="ghost" type="button">ส่งออก JSON</button><button id="rw-clear" class="ghost" type="button">ล้างคลัง</button></div>
       </div>
-      <p class="note">เลือกหลายหน้า/หลายตอนแล้วกด “รวมรายการที่เลือก” เพื่อสร้างชุดอ่านวิเคราะห์ใหม่ รายการเดิมจะยังอยู่เหมือนเดิม</p>
+      <p class="note">เลือกหลายหน้า/หลายตอนตามลำดับที่ต้องการรวม (เลือกหน้าต้นก่อน แล้วหน้าถัดไป) จากนั้นกด “รวมรายการที่เลือก” รายการเดิมจะยังอยู่เหมือนเดิม</p>
       <div id="rw-stats" class="rw-stats"></div>
       <div id="rw-library" class="rw-list"></div>
     </section>
@@ -1374,6 +1374,7 @@ function renderStory(s){
 
 // ===== ReadAWrite local library: no API, no remote text processing =====
 const RW_IMPORT_KEY = "novellens.readawrite.imports.v1";
+let rwSelectionOrder = [];
 const rwGet = id => document.getElementById(id);
 const readAWriteItems = () => { try { const x = JSON.parse(localStorage.getItem(RW_IMPORT_KEY) || "[]"); return Array.isArray(x) ? x : []; } catch { return []; } };
 const rwEscape = s => String(s || "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -1410,7 +1411,7 @@ function mergeCaptureText(existing, incoming) {
   if(!b || a===b || a.includes(b)) return a;
   if(b.includes(a)) return b;
   const max=Math.min(a.length,b.length,4000);
-  for(let k=max;k>=100;k--) {
+  for(let k=max;k>=40;k--) {
     if(a.slice(-k)===b.slice(0,k)) return (a+"\n\n"+b.slice(k).trim()).trim();
   }
   return (a+"\n\n"+b).trim();
@@ -1426,18 +1427,22 @@ function renderReadAWriteLibrary() {
   const stories = new Set(items.map(x => x.storyUrl || x.sourceUrl));
   stats.innerHTML = '<div class="rw-stat"><span>เรื่องที่พบ</span><b>' + stories.size + '</b></div><div class="rw-stat"><span>ตอนที่เก็บไว้</span><b>' + items.length + '</b></div><div class="rw-stat"><span>ตัวอักษรรวม</span><b>' + items.reduce((n,x)=>n+(x.text||"").length,0).toLocaleString() + '</b></div>';
   if (!items.length) { list.innerHTML = '<div class="rw-empty">ยังไม่มีตอนในคลัง เปิดหน้าตอน ReadAWrite แล้วกด bookmarklet “ดึงเข้าห้องแกะนิยาย” เพื่อเพิ่มตอน</div>'; return; }
+  rwSelectionOrder = [];
   list.innerHTML = items.map(x => '<article class="rw-item"><div><label class="row" style="gap:8px"><input type="checkbox" data-rw-select="' + rwEscape(x.id) + '" aria-label="เลือกรายการ ' + rwEscape(x.chapterTitle) + '"><h3>' + rwEscape(x.chapterTitle) + '</h3></label><p>' + rwEscape(x.storyUrl || (x.kind === "collection" ? "ชุดรวมจากคลัง" : x.sourceUrl)) + '</p><p>' + (x.text||"").length.toLocaleString() + ' ตัวอักษร · ' + (x.kind === "collection" ? ((x.sourceIds||[]).length + ' รายการที่รวม') : ((x.captureCount || 1) + ' ครั้งที่นำเข้า')) + ' · อัปเดต ' + rwEscape(new Date(x.updatedAt).toLocaleString()) + '</p></div><div class="row"><button type="button" data-rw-analyze="' + rwEscape(x.id) + '">วิเคราะห์</button>' + (x.kind === "collection" ? '' : '<button type="button" class="ghost" data-rw-open="' + rwEscape(x.id) + '">เปิดต้นทาง</button>') + '<button type="button" class="ghost" data-rw-delete="' + rwEscape(x.id) + '">ลบ</button></div></article>').join("");
+  list.querySelectorAll("[data-rw-select]").forEach(cb => cb.addEventListener("change", () => { const id=cb.dataset.rwSelect; rwSelectionOrder=rwSelectionOrder.filter(x=>x!==id); if(cb.checked)rwSelectionOrder.push(id); }));
   list.querySelectorAll("[data-rw-analyze]").forEach(b => b.onclick = () => { const x = readAWriteItems().find(i => i.id === b.dataset.rwAnalyze); if (!x) return; src.value = x.text; updateCount(); isExample = false; saveAnalysisSession(src.value); run(); $("t-analyze").click(); $("work").scrollIntoView({behavior:"smooth"}); });
   list.querySelectorAll("[data-rw-open]").forEach(b => b.onclick = () => { const x = readAWriteItems().find(i => i.id === b.dataset.rwOpen); if (x) window.open(x.sourceUrl, "_blank", "noopener"); });
   list.querySelectorAll("[data-rw-delete]").forEach(b => b.onclick = () => { const x = readAWriteItems().find(i => i.id === b.dataset.rwDelete); if (x && confirm('ลบตอน "' + x.chapterTitle + '" ออกจากคลังในเบราว์เซอร์นี้หรือไม่?')) { localStorage.setItem(RW_IMPORT_KEY, JSON.stringify(readAWriteItems().filter(i => i.id !== x.id))); renderReadAWriteLibrary(); } });
 }
 rwGet("rw-merge-selected").onclick = () => {
   const status=rwGet("rw-status");
-  const ids=[...document.querySelectorAll("[data-rw-select]:checked")].map(x=>x.dataset.rwSelect);
+  const checkedIds=[...document.querySelectorAll("[data-rw-select]:checked")].map(x=>x.dataset.rwSelect);
+  const ids=[...rwSelectionOrder.filter(id=>checkedIds.includes(id)),...checkedIds.filter(id=>!rwSelectionOrder.includes(id))];
   if(ids.length<2){status.textContent="เลือกอย่างน้อย 2 รายการเพื่อรวมเป็นชุด";return;}
   const all=readAWriteItems();
-  // Use checkboxes in their displayed order; preserve originals rather than destructively replacing them.
-  const picked=all.filter(x=>ids.includes(x.id));
+  // Respect the sequence in which the user checked the source pages; keep originals untouched.
+  const byId=new Map(all.map(x=>[x.id,x]));
+  const picked=ids.map(id=>byId.get(id)).filter(Boolean);
   const text=mergeLibraryTexts(picked);
   if(!text.trim()){status.textContent="รายการที่เลือกไม่มีข้อความให้นำมารวม";return;}
   const id="set-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,7);
