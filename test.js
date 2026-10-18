@@ -34,7 +34,18 @@ for (const genre of Object.keys(api.PLOTS)) for (const structure of Object.keys(
 }
 assert.equal(api.generate({chars: [{}], plot: {}}), null, "needs at least one named character");
 
-// Input integrity and evidence checks\nassert(api.inspectTextQuality(api.SAMPLE_TEXT).ok, "readable Thai sample passes text quality guard");\nconst protectedText = "ภาษาไทยที่มองเห็นได้ " + "\\uE56A".repeat(24);\nconst protectedResult = api.inspectTextQuality(protectedText);\nassert.equal(protectedResult.ok, false, "private-use font glyphs are rejected before analysis");\nassert.equal(protectedResult.issue, "protected-font", "protected-font issue is identified");\nassert(api.inspectTextQuality("ต้นฉบับธรรมดาที่มีภาษาไทยและคำพูด \\uFFFD").ok, "one replacement character is not over-blocked");\nconst evidence = api.feelEvidence(api.SAMPLE_TEXT);\nassert(evidence.length > 0 && evidence[0].terms.length > 0, "analysis provides explicit keywords supporting a tone");\nassert(api.classifyEvidence(evidence).label, "genre evidence is labelled with cautious strength");\n\n// ReadAWrite importer UI and local-only storage contract
+// Input integrity and evidence checks
+assert(api.inspectTextQuality(api.SAMPLE_TEXT).ok, "readable Thai sample passes text quality guard");
+const protectedText = "ภาษาไทยที่มองเห็นได้ " + "\uE56A".repeat(24);
+const protectedResult = api.inspectTextQuality(protectedText);
+assert.equal(protectedResult.ok, false, "private-use font glyphs are rejected before analysis");
+assert.equal(protectedResult.issue, "protected-font", "protected-font issue is identified");
+assert(api.inspectTextQuality("ต้นฉบับธรรมดาที่มีภาษาไทยและคำพูด \uFFFD").ok, "one replacement character is not over-blocked");
+const evidence = api.feelEvidence(api.SAMPLE_TEXT);
+assert(evidence.length > 0 && evidence[0].terms.length > 0, "analysis provides explicit keywords supporting a tone");
+assert(api.classifyEvidence(evidence).label, "genre evidence is labelled with cautious strength");
+
+\n// ReadAWrite importer UI and local-only storage contract
 assert(html.includes('id="t-import"') && html.includes('id="p-import"'), "ReadAWrite library tab and panel exist");
 assert(html.includes("novellens.readawrite.imports.v1"), "imports persist in browser-local storage");
 assert(html.includes("saveReadAWriteImport") && html.includes("sourceUrl:location.href"), "bookmarklet sends source metadata for chapter imports");
