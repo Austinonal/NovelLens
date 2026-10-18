@@ -251,6 +251,10 @@ summary::marker{color:var(--pen)}
         </div>
         <label for="src">ต้นฉบับที่จะวิเคราะห์</label>
         <textarea id="src" placeholder="วางข้อความที่อ่านได้ หรือเปิดไฟล์ .txt / .md ของคุณ"></textarea>
+        <div class="row" style="margin-top:8px">
+          <button id="paste-clipboard" class="ghost" type="button">วางจากคลิปบอร์ด</button>
+          <span class="note">ใช้หลังคัดลอกด้วยวิธีที่เว็บไซต์/ผู้เขียนอนุญาต</span>
+        </div>
         <label for="file-import">หรือเปิดไฟล์ต้นฉบับของคุณ (.txt / .md)</label>
         <input id="file-import" class="file-import" type="file" accept=".txt,.md,text/plain,text/markdown">
         <p class="note">แนะนำให้วิเคราะห์จากต้นฉบับที่เป็นข้อความอ่านได้ หากระบบ ReadAWrite แสดงอักขระแปลก ๆ หลังดึงมา จะหยุดการวิเคราะห์แทนการเดาเนื้อหา</p>
@@ -594,12 +598,14 @@ const ANALYSIS_SESSION_KEY = "novellens.analysis.session.v1";
 function saveAnalysisSession(text){
   try {
     const value=String(text||"");
-    if(value.trim() && inspectTextQuality(value).ok) localStorage.setItem(ANALYSIS_SESSION_KEY,JSON.stringify({text:value,updatedAt:new Date().toISOString()}));
-    else localStorage.removeItem(ANALYSIS_SESSION_KEY);
+    if(!value.trim()) { localStorage.removeItem(ANALYSIS_SESSION_KEY); return; }
+    // Keep even damaged imports as a draft so refresh does not silently erase what the user was investigating.
+    if(value.length > 5*1024*1024) return;
+    localStorage.setItem(ANALYSIS_SESSION_KEY,JSON.stringify({text:value,updatedAt:new Date().toISOString()}));
   } catch(_) {}
 }
 function restoreAnalysisSession(){
-  try { const value=JSON.parse(localStorage.getItem(ANALYSIS_SESSION_KEY)||"null"); return value && typeof value.text==="string" && inspectTextQuality(value.text).ok ? value : null; }
+  try { const value=JSON.parse(localStorage.getItem(ANALYSIS_SESSION_KEY)||"null"); return value && typeof value.text==="string" ? value : null; }
   catch(_) { return null; }
 }
 
@@ -684,7 +690,7 @@ function showQualityWarning(q, place="ต้นฉบับ"){
     ? "ผลตรวจชี้ไปที่ชั้นข้อความ/การแมป glyph ที่อาจใช้ร่วมกับฟอนต์เฉพาะ ไม่ใช่หลักฐานว่า CSS font-family เป็นสาเหตุเพียงอย่างเดียว การเปลี่ยน MEB, Droid Sans, Pridi, Taviraj, Trirong, Garuda, Jindara, Tahoma หรือ System อาจเปลี่ยนรูปลักษณ์ แต่ไม่จำเป็นต้องเปลี่ยนรหัสอักขระที่ NovelLens อ่านได้"
     : "ผลตรวจพบความผิดปกติของข้อความที่อาจทำให้การวิเคราะห์คลาดเคลื่อน";
   const nextStep = fontMapping
-    ? "วิธีตรวจอย่างปลอดภัย: บน ReadAWrite ลองเปลี่ยนฟอนต์ แล้วคัดลอกประโยคสั้น ๆ ที่เว็บไซต์อนุญาตให้คัดลอกไปวางใน Notepad หากยังกลายเป็นสัญลักษณ์เดิม แสดงว่าข้อความที่ส่งออกมาไม่ใช่ภาษาไทยปกติ ให้ใช้ข้อความต้นฉบับที่ผู้เขียนอนุญาตหรือไฟล์ที่คุณมีสิทธิ์ใช้แทน"
+    ? "วิธีลองนำเข้าอีกแบบ: ถ้าผู้เขียน/เว็บไซต์อนุญาตให้คัดลอก ให้ใช้วิธีคัดลอกที่ ReadAWrite มีให้ แล้วกลับมาคลิก “วางจากคลิปบอร์ด” ใต้ช่องต้นฉบับ หากยังพบอักขระ Private Use Area เหมือนเดิม แปลว่าคลิปบอร์ดก็ยังส่งรหัสอักขระเหล่านั้นมา ต้องใช้ข้อความหรือไฟล์ต้นฉบับที่ผู้เขียนอนุญาตให้ใช้แทน การเปลี่ยนฟอนต์อย่างเดียวไม่ได้รับประกันว่าจะเปลี่ยนรหัสข้อความ"
     : "วิธีแก้: ใช้ไฟล์ .txt หรือ .md ต้นฉบับที่คุณเป็นเจ้าของ หรือวางข้อความสะอาดที่คุณมีสิทธิ์ใช้";
   report.replaceChildren(el("section", {class:"quality-warning"},
     el("span", {class:"tag"}, "ตรวจสอบคุณภาพข้อความ · " + place),
@@ -702,13 +708,27 @@ function run(){
   const text = src.value.trim();
   if (!text) { status.textContent = "วางข้อความที่อ่านได้หรือเปิดไฟล์ต้นฉบับก่อน"; return; }
   const quality = inspectTextQuality(text);
-  if (!quality.ok) { saveAnalysisSession(""); showQualityWarning(quality); return; }
+  if (!quality.ok) { saveAnalysisSession(text); showQualityWarning(quality); return; }
   ref = analyze(text); render(ref); saveAnalysisSession(text); status.textContent = "";
 }
 $("go").onclick = () => { isExample = false; run(); };
 $("clear").onclick = () => { src.value = ""; try{localStorage.removeItem(ANALYSIS_SESSION_KEY);}catch(_){} src.focus(); updateCount(); report.replaceChildren(); status.textContent = ""; ref = null; };
 const updateCount = () => $("count").textContent = src.value.length.toLocaleString() + " ตัวอักษร";
 src.addEventListener("input", () => { updateCount(); saveAnalysisSession(src.value); });
+$("paste-clipboard").onclick = async () => {
+  if (!navigator.clipboard || typeof navigator.clipboard.readText !== "function") {
+    status.textContent = "เบราว์เซอร์ไม่อนุญาตให้อ่านคลิปบอร์ดอัตโนมัติ ให้คลิกช่องต้นฉบับแล้วกด Ctrl+V";
+    return;
+  }
+  try {
+    const copied = await navigator.clipboard.readText();
+    if (!copied.trim()) { status.textContent = "คลิปบอร์ดว่าง คัดลอกข้อความที่เว็บไซต์อนุญาตก่อน แล้วลองอีกครั้ง"; return; }
+    src.value = copied; isExample = false; updateCount(); saveAnalysisSession(copied); run();
+    if (inspectTextQuality(copied).ok) status.textContent = "นำเข้าจากคลิปบอร์ดแล้ว";
+  } catch (_) {
+    status.textContent = "เบราว์เซอร์ปฏิเสธการอ่านคลิปบอร์ด ให้คลิกช่องต้นฉบับแล้วกด Ctrl+V แทน";
+  }
+};
 $("file-import").addEventListener("change", async e => {
   const file = e.target.files?.[0];
   if (!file) return;
@@ -730,6 +750,7 @@ addEventListener("message", e => {
   if (e.source !== window.opener || e.data?.type !== "novel-text") return;
   src.value = String(e.data.text || ""); updateCount();
   isExample = false;
+  saveAnalysisSession(src.value);
   const quality = inspectTextQuality(src.value);
   if (!quality.ok) {
     showQualityWarning(quality, "ข้อความจาก Bookmarklet · ฟอนต์ต้นทาง: " + String(e.data.sourceFont || "ไม่ทราบ").slice(0, 100));
