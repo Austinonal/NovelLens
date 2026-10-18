@@ -1212,7 +1212,7 @@ const rwEscape = s => String(s || "").replace(/[&<>"']/g, c => ({"&":"&amp;","<"
 function saveReadAWriteImport(data) {
   const text = String(data.text || "").trim();
   const sourceUrl = String(data.sourceUrl || "");
-  if (text.length < 80 || !/^https?:\/\/(www\.)?readawrite(officer)?\.com\//i.test(sourceUrl)) return null;
+  if (text.length < 80 || !/^https?:\/\/(?:[^/]+\.)?readawrite\.com\//i.test(sourceUrl)) return null;
   const items = readAWriteItems();
   const old = items.find(x => x.sourceUrl === sourceUrl);
   const item = {
