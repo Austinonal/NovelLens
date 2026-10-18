@@ -412,7 +412,7 @@ function characters(text, cands){
     const feel = Object.entries(feelScores(near)).sort((a, b) => b[1] - a[1])[0];
     return {name, mentions, acts, lines, traits, mood: feel?.[1] ? feel[0] : ""};
   }).filter(c => c.acts >= 2 || (c.acts >= 1 && c.lines >= 1))
-    .map((c, i) => ({...c, role: i === 0 ? "ตัวเอก (ถูกพูดถึงมากที่สุด)" : "ตัวละครรอง"}));
+    .map((c, i) => ({...c, role: i === 0 ? "คำ/ชื่อที่ถูกพูดถึงมากที่สุด (ไม่ยืนยันว่าเป็นตัวเอก)" : "คำ/ชื่อที่อาจเป็นตัวละคร"}));
 }
 
 // Emotion arc: the same feel scores, measured slice by slice through the chapter.
@@ -448,6 +448,15 @@ function inspectTextQuality(raw){
   };
 }
 
+function classifyEvidence(evidence){
+  if(!evidence.length) return {label:"ข้อมูลไม่พอ",detail:"ไม่พบคำจากรายการคำอารมณ์ จึงไม่ควรฟันธงแนวเรื่อง"};
+  const first=evidence[0], second=evidence[1];
+  const distinct=first.terms.length;
+  const gap=first.total-(second?.total||0);
+  if(first.total<3 || distinct<2) return {label:"ต่ำ",detail:"พบหลักฐานน้อยเกินไปหรือกระจายไม่ชัด ควรตรวจผลด้วยตัวเอง"};
+  if(first.total>=8 && distinct>=3 && gap>=2) return {label:"ค่อนข้างชัดตามกฎคำ",detail:"มีคำหลักหลายคำสนับสนุนแนวนี้ แต่ยังไม่ใช่การตีความความหมายระดับมนุษย์"};
+  return {label:"ปานกลาง/คาบเกี่ยว",detail:"มีคำสนับสนุนมากกว่าหนึ่งกลุ่ม แนวเรื่องอาจผสมกันหรือยังต้องดูบริบท"};
+}
 function feelEvidence(text){
   return Object.entries(FEELS).map(([genre,rawWords])=>{
     return {genre,terms:rawWords.split(" ").map(word=>({word,hits:count(text,word)})).filter(x=>x.hits>0).sort((a,b)=>b.hits-a.hits).slice(0,5)};
@@ -480,6 +489,7 @@ function analyze(raw){
     lang: literary > 2 ? "สละสลวยแบบวรรณกรรม" : rough > polite ? "ภาษาพูดกันเอง ห้วนๆ" : polite > 2 ? "สุภาพ มีหางเสียง" : "เรียบง่าย ภาษาปัจจุบัน",
     feel: feelScores(text),
     evidence: feelEvidence(text),
+    genreEvidence: classifyEvidence(feelEvidence(text)),
     opens: /^["“‘]/.test(paras[0] || "") ? "บทพูด" : "บรรยาย",
     ends: /[?…]|\.\.\.|['’]$/.test((paras.at(-1) || "").slice(-3)) ? "ทิ้งคำถาม/ค้างไว้" : /["”]$/.test(paras.at(-1) || "") ? "บทพูด" : "บรรยาย",
     words,
@@ -568,14 +578,15 @@ function render(a){
       el("span", {class:"tag"}, isExample ? "ตัวอย่าง: ผลวิเคราะห์ของข้อความตัวอย่าง" : "ผลวิเคราะห์"),
       el("div", {class:"genre"}, feels.length ? feels.slice(0, 2).map(([k]) => GENRE[k]).join(" + ") : "ยังจับแนวไม่ได้"),
       el("p", {class:"note"}, "ประเมินจากคำที่ใช้ " + a.chars.toLocaleString() + " ตัวอักษร " + a.paraCount + " ย่อหน้า" + (a.chars < 800 ? " · ข้อความสั้น ผลอาจคลาดเคลื่อน" : ""))),
-    sec("เนื้อเรื่องโดยย่อ (ประโยคสำคัญจากต้นฉบับ)", a.summary.length ? el("ol", {class:"summary"}, a.summary.map(s => el("li", {}, s))) : el("p", {class:"note"}, "ข้อความสั้นเกินไป")),
+    sec("ประโยคที่คัดมาเป็นร่างเรื่องย่อ (ไม่ใช่การสรุปความหมายโดยตรง)", a.summary.length ? el("ol", {class:"summary"}, a.summary.map(s => el("li", {}, s))) : el("p", {class:"note"}, "ข้อความสั้นเกินไป")),
     sec("หลักฐานที่ใช้จับโทน", a.evidence?.length
       ? el("div", {class:"rw-list"}, a.evidence.slice(0, 4).map(x => el("div", {class:"rw-item"}, el("div", {}, el("b", {}, x.genre), el("p", {}, "พบคำ/วลีตามรายการคำ " + x.total + " ครั้ง"), el("p", {class:"note"}, "ตัวอย่างคำที่พบ: " + x.terms.map(t => t.word + " ×" + t.hits).join(" · "))))))
       : el("p", {class:"note"}, "ไม่พบคำจากรายการคำอารมณ์ที่ระบบใช้เป็นหลักฐาน")), 
     sec("ฟีลของเรื่อง", feels.length
       ? el("div", {class:"bars"}, feels.flatMap(([k, v]) => [el("span", {}, k), el("div", {class:"bar"}, el("i", {style:"width:" + Math.round(v / max * 100) + "%"})), el("span", {class:"n"}, v.toFixed(1))]))
       : el("p", {}, "ไม่พบคำที่บอกอารมณ์ชัดเจน"),
-      el("p", {class:"note"}, "ตัวเลข = จำนวนคำอารมณ์ต่อ 1,000 ตัวอักษร (ไม่นับคำที่มี ไม่ นำหน้า)")),
+      el("p", {class:"note"}, "ตัวเลข = จำนวนคำอารมณ์ต่อ 1,000 ตัวอักษร (ไม่นับคำที่มี ไม่ นำหน้า)"),
+      el("p", {class:"note"}, "ระดับหลักฐาน: " + (a.genreEvidence?.label || "ไม่ทราบ") + " — " + (a.genreEvidence?.detail || "ระบบเทียบคำสำคัญ ไม่ได้อ่านความหมายทั้งหมด"))),
     sec("อารมณ์ไล่ตามตอน",
       el("div", {class:"arc", role:"img", "aria-label":"ความเข้มอารมณ์ 6 ช่วง จุดสูงสุดอยู่" + a.peak},
         a.curve.map((x, i) => el("div", {}, el("i", {style:"height:" + Math.round(x.total / arcMax * 80) + "%"}), el("span", {}, (i + 1) + " " + x.top)))),
@@ -583,7 +594,7 @@ function render(a){
     el("div", {class:"pair"},
       sec("โทนและจังหวะ", dl([["อารมณ์หลัก", feels[0]?.[0] || "เรียบ"], ["จังหวะ", pace(a)], ["เปิดเรื่องด้วย", a.opens], ["จบตอนด้วย", a.ends]])),
       sec("สไตล์การเขียน", dl([["มุมมอง", a.pov], ["ระดับภาษา", a.lang], ["บทพูด", pct(a.dialogue)], ["ความยาววลี", Math.round(a.clause) + " ตัวอักษร"], ["ย่อหน้า", Math.round(a.para) + " ตัวอักษร"], ["ผัสสะ", a.senses.toFixed(1) + " / 1,000"], ["! ? …", [a.exclaim, a.question, a.ellipsis].map(x => x.toFixed(1)).join(" · ")]]))),
-    sec("ตัวละคร", a.cast.length
+    sec("คำ/ชื่อที่อาจเป็นตัวละคร (ควรตรวจทาน)", a.cast.length
       ? el("div", {class:"chars"}, a.cast.map(c => el("div", {class:"char"},
           el("b", {}, c.name), el("span", {class:"role"}, c.role),
           dl([["ถูกพูดถึง", c.mentions + " ครั้ง"], ["ฉากที่มีบทพูด", c.lines + ""], ["อารมณ์รอบตัว", c.mood || "-"]]),
@@ -605,6 +616,9 @@ function coach(){
   const btn = el("button", {}, "เทียบกับต้นฉบับ");
   const out = el("div", {});
   btn.onclick = () => {
+    if (!ref) { out.replaceChildren(el("p", {class:"note"}, "ต้องมีผลวิเคราะห์จากต้นฉบับที่อ่านได้ก่อน จึงจะเทียบร่างได้")); return; }
+    const draftQuality = inspectTextQuality(box.value);
+    if (!draftQuality.ok) { out.replaceChildren(el("p", {class:"note"}, "ร่างมีอักขระผิดปกติ: " + draftQuality.message)); return; }
     if (box.value.trim().length < 50) { out.replaceChildren(el("p", {class:"note"}, "ใส่ร่างอย่างน้อยสักย่อหน้า ระบบถึงจะวัดได้")); return; }
     const r = compare(ref, analyze(box.value));
     out.replaceChildren(
