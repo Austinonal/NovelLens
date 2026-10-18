@@ -702,7 +702,7 @@ function run(){
   const text = src.value.trim();
   if (!text) { status.textContent = "วางข้อความที่อ่านได้หรือเปิดไฟล์ต้นฉบับก่อน"; return; }
   const quality = inspectTextQuality(text);
-  if (!quality.ok) { showQualityWarning(quality); return; }
+  if (!quality.ok) { saveAnalysisSession(""); showQualityWarning(quality); return; }
   ref = analyze(text); render(ref); saveAnalysisSession(text); status.textContent = "";
 }
 $("go").onclick = () => { isExample = false; run(); };
