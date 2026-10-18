@@ -570,7 +570,7 @@ function render(a){
       el("p", {class:"note"}, "ประเมินจากคำที่ใช้ " + a.chars.toLocaleString() + " ตัวอักษร " + a.paraCount + " ย่อหน้า" + (a.chars < 800 ? " · ข้อความสั้น ผลอาจคลาดเคลื่อน" : ""))),
     sec("เนื้อเรื่องโดยย่อ (ประโยคสำคัญจากต้นฉบับ)", a.summary.length ? el("ol", {class:"summary"}, a.summary.map(s => el("li", {}, s))) : el("p", {class:"note"}, "ข้อความสั้นเกินไป")),
     sec("หลักฐานที่ใช้จับโทน", a.evidence?.length
-      ? el("div", {class:"rw-list"}, a.evidence.slice(0, 4).map(x => el("div", {class:"rw-item"}, el("div", {}, el("b", {}, x.genre), el("p", {}, "พบคำ/วลีตามรายการคำ " + x.total + " ครั้ง"), el("p", {class:"note"}, "ตัวอย่างคำที่พบ: " + x.terms.map(t => t.word + " ×" + t.hits).join(" · ")))))
+      ? el("div", {class:"rw-list"}, a.evidence.slice(0, 4).map(x => el("div", {class:"rw-item"}, el("div", {}, el("b", {}, x.genre), el("p", {}, "พบคำ/วลีตามรายการคำ " + x.total + " ครั้ง"), el("p", {class:"note"}, "ตัวอย่างคำที่พบ: " + x.terms.map(t => t.word + " ×" + t.hits).join(" · "))))))
       : el("p", {class:"note"}, "ไม่พบคำจากรายการคำอารมณ์ที่ระบบใช้เป็นหลักฐาน")), 
     sec("ฟีลของเรื่อง", feels.length
       ? el("div", {class:"bars"}, feels.flatMap(([k, v]) => [el("span", {}, k), el("div", {class:"bar"}, el("i", {style:"width:" + Math.round(v / max * 100) + "%"})), el("span", {class:"n"}, v.toFixed(1))]))
@@ -662,8 +662,17 @@ $("bm").onclick = e => { e.preventDefault(); status.textContent = "ลากป�
 addEventListener("message", e => {
   if (e.source !== window.opener || e.data?.type !== "novel-text") return;
   src.value = String(e.data.text || ""); updateCount();
+  isExample = false;
+  const quality = inspectTextQuality(src.value);
+  if (!quality.ok) {
+    showQualityWarning(quality, "ข้อความจาก Bookmarklet");
+    status.textContent = "ไม่ได้บันทึกข้อความนี้ เพราะตรวจพบอักขระที่อาจถูกแทนด้วยฟอนต์พิเศษ";
+    const rwStatus = document.getElementById("rw-status");
+    if (rwStatus) rwStatus.textContent = "ไม่ได้เพิ่มเข้าคลัง: ข้อความที่ดึงมาอาจไม่ใช่ต้นฉบับที่อ่านได้";
+    return;
+  }
   status.textContent = "ดึงมาแล้ว: " + String(e.data.title || "").slice(0, 80);
-  isExample = false; run();
+  run();
   if (typeof saveReadAWriteImport === "function") {
     const item = saveReadAWriteImport(e.data);
     if (item) {
