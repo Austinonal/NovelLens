@@ -1289,6 +1289,12 @@ const rwEscape = s => String(s || "").replace(/[&<>"']/g, c => ({"&":"&amp;","<"
 function saveReadAWriteImport(data) {
   const text = String(data.text || "").trim();
   const sourceUrl = String(data.sourceUrl || "");
+  const quality = inspectTextQuality(text);
+  if (!quality.ok) {
+    const status = rwGet("rw-status");
+    if (status) status.textContent = "ไม่ได้บันทึก: ข้อความไม่สมบูรณ์หรือมีอักขระจากฟอนต์พิเศษ";
+    return null;
+  }
   if (text.length < 80 || !/^https?:\/\/(?:[^/]+\.)?readawrite\.com\//i.test(sourceUrl)) return null;
   const items = readAWriteItems();
   const old = items.find(x => x.sourceUrl === sourceUrl);
