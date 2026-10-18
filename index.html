@@ -635,14 +635,23 @@ function coach(){
 
 function showQualityWarning(q, place="ต้นฉบับ"){
   ref = null;
+  const fontMapping = q.issue === "protected-font";
+  const details = "ขนาดข้อความ: " + q.size.toLocaleString() + " ตัวอักษร · อักขระกลุ่มฟอนต์พิเศษ: " + q.pua.toLocaleString() + " · อักขระเสียหาย: " + q.replacement.toLocaleString();
+  const diagnosis = fontMapping
+    ? "ผลตรวจชี้ไปที่ชั้นข้อความ/การแมป glyph ที่อาจใช้ร่วมกับฟอนต์เฉพาะ ไม่ใช่หลักฐานว่า CSS font-family เป็นสาเหตุเพียงอย่างเดียว การเปลี่ยน MEB, Droid Sans, Pridi, Taviraj, Trirong, Garuda, Jindara, Tahoma หรือ System อาจเปลี่ยนรูปลักษณ์ แต่ไม่จำเป็นต้องเปลี่ยนรหัสอักขระที่ NovelLens อ่านได้"
+    : "ผลตรวจพบความผิดปกติของข้อความที่อาจทำให้การวิเคราะห์คลาดเคลื่อน";
+  const nextStep = fontMapping
+    ? "วิธีตรวจอย่างปลอดภัย: บน ReadAWrite ลองเปลี่ยนฟอนต์ แล้วคัดลอกประโยคสั้น ๆ ที่เว็บไซต์อนุญาตให้คัดลอกไปวางใน Notepad หากยังกลายเป็นสัญลักษณ์เดิม แสดงว่าข้อความที่ส่งออกมาไม่ใช่ภาษาไทยปกติ ให้ใช้ข้อความต้นฉบับที่ผู้เขียนอนุญาตหรือไฟล์ที่คุณมีสิทธิ์ใช้แทน"
+    : "วิธีแก้: ใช้ไฟล์ .txt หรือ .md ต้นฉบับที่คุณเป็นเจ้าของ หรือวางข้อความสะอาดที่คุณมีสิทธิ์ใช้";
   report.replaceChildren(el("section", {class:"quality-warning"},
     el("span", {class:"tag"}, "ตรวจสอบคุณภาพข้อความ · " + place),
     el("h2", {}, "ยังวิเคราะห์ไม่ได้อย่างน่าเชื่อถือ"),
     el("p", {}, q.message || "ข้อความที่นำเข้าอาจไม่สมบูรณ์"),
-    el("p", {}, "ขนาดข้อความ: " + q.size.toLocaleString() + " ตัวอักษร · อักขระกลุ่มฟอนต์พิเศษ: " + q.pua.toLocaleString() + " · อักขระเสียหาย: " + q.replacement.toLocaleString()),
+    el("p", {}, details),
+    el("p", {}, diagnosis),
     el("p", {}, "ทำไมต้องหยุด? ตัววิเคราะห์ NovelLens ใช้กฎและรายการคำ ไม่ได้เข้าใจข้อความที่ถูกแปลงเป็นรหัส หากวิเคราะห์ต่อจะมีโอกาสสรุปแนว ตัวละคร และพล็อตผิด"),
-    el("p", {}, "วิธีแก้: ใช้ไฟล์ .txt หรือ .md ต้นฉบับที่คุณเป็นเจ้าของ หรือวางข้อความสะอาดที่คุณมีสิทธิ์ใช้ หากเนื้อหาบนเว็บไซต์ถูกแสดงด้วยอักขระแทนผ่านฟอนต์ ต้องใช้ต้นฉบับที่ได้รับอนุญาต ไม่ใช่ผลข้อความที่ดึงออกมาแล้วเพี้ยน"),
-    el("p", {class:"note"}, "NovelLens จะไม่พยายามถอดรหัสหรือหลบกลไกป้องกันการคัดลอกของเว็บไซต์")
+    el("p", {}, nextStep),
+    el("p", {class:"note"}, "NovelLens จะไม่ถอดรหัสฟอนต์เฉพาะหรือหลบกลไกป้องกันการคัดลอกของเว็บไซต์")
   ));
   status.textContent = "หยุดการวิเคราะห์: ตรวจพบปัญหาคุณภาพข้อความ";
 }
@@ -671,7 +680,7 @@ $("file-import").addEventListener("change", async e => {
 });
 
 // --- Receive chapter text from the bookmarklet ---
-const BOOKMARKLET = app => `javascript:(()=>{const APP=${JSON.stringify(app)};let t=String(getSelection()).trim();if(t.length<200){const m=new Map();document.querySelectorAll('p').forEach(p=>{const k=p.parentElement;m.set(k,(m.get(k)||0)+p.innerText.trim().length)});let b=null,n=0;m.forEach((v,k)=>{if(v>n){n=v;b=k}});if(!b||n<=200){alert('ไม่พบเนื้อเรื่องเป็นข้อความบนหน้านี้ ถ้าเว็บมีโหมดอ่านแบบ html ให้สลับไปโหมดนั้น หรือลากคลุมเนื้อเรื่องแล้วกดใหม่');return}t=b.innerText.trim()}const host=location.hostname;const links=[...document.querySelectorAll('a[href]')].filter(a=>/readawrite\\.com$/.test(new URL(a.href,location.href).hostname)&&/\\/a\\//.test(new URL(a.href,location.href).pathname));const storyLink=links.find(a=>a.href!==location.href&&!/ตอนที่|chapter|episode/i.test(a.innerText))?.href||location.href;const title=document.querySelector('h1')?.innerText.trim()||document.querySelector('meta[property="og:title"]')?.content||document.title;const w=window.open(APP,'_blank');const o=new URL(APP).origin;addEventListener('message',function f(e){if(e.source===w&&e.origin===o&&e.data==='novel-ready'){w.postMessage({type:'novel-text',text:t,title:document.title,chapterTitle:title,sourceUrl:location.href,storyUrl:storyLink,sourceHost:host},o);removeEventListener('message',f)}})})()`;
+const BOOKMARKLET = app => `javascript:(()=>{const APP=${JSON.stringify(app)};let t=String(getSelection()).trim();if(t.length<200){const m=new Map();document.querySelectorAll('p').forEach(p=>{const k=p.parentElement;m.set(k,(m.get(k)||0)+p.innerText.trim().length)});let b=null,n=0;m.forEach((v,k)=>{if(v>n){n=v;b=k}});if(!b||n<=200){alert('ไม่พบเนื้อเรื่องเป็นข้อความบนหน้านี้ ถ้าเว็บมีโหมดอ่านแบบ html ให้สลับไปโหมดนั้น หรือลากคลุมเนื้อเรื่องแล้วกดใหม่');return}t=b.innerText.trim()}const host=location.hostname;const links=[...document.querySelectorAll('a[href]')].filter(a=>/readawrite\\.com$/.test(new URL(a.href,location.href).hostname)&&/\\/a\\//.test(new URL(a.href,location.href).pathname));const storyLink=links.find(a=>a.href!==location.href&&!/ตอนที่|chapter|episode/i.test(a.innerText))?.href||location.href;const title=document.querySelector('h1')?.innerText.trim()||document.querySelector('meta[property="og:title"]')?.content||document.title;const w=window.open(APP,'_blank');const o=new URL(APP).origin;addEventListener('message',function f(e){if(e.source===w&&e.origin===o&&e.data==='novel-ready'){w.postMessage({type:'novel-text',text:t,title:document.title,chapterTitle:title,sourceUrl:location.href,storyUrl:storyLink,sourceHost:host,sourceFont:getComputedStyle(document.querySelector("article")||document.querySelector("main")||document.body).fontFamily},o);removeEventListener('message',f)}})})()`;
 $("bm").href = BOOKMARKLET(location.href.split("#")[0]);
 $("bm").onclick = e => { e.preventDefault(); status.textContent = "ลากปุ่มนี้ไปไว้ที่แถบบุ๊กมาร์ก แล้วไปกดที่หน้าตอนนิยาย"; };
 addEventListener("message", e => {
@@ -680,7 +689,7 @@ addEventListener("message", e => {
   isExample = false;
   const quality = inspectTextQuality(src.value);
   if (!quality.ok) {
-    showQualityWarning(quality, "ข้อความจาก Bookmarklet");
+    showQualityWarning(quality, "ข้อความจาก Bookmarklet · ฟอนต์ต้นทาง: " + String(e.data.sourceFont || "ไม่ทราบ").slice(0, 100));
     status.textContent = "ไม่ได้บันทึกข้อความนี้ เพราะตรวจพบอักขระที่อาจถูกแทนด้วยฟอนต์พิเศษ";
     const rwStatus = document.getElementById("rw-status");
     if (rwStatus) rwStatus.textContent = "ไม่ได้เพิ่มเข้าคลัง: ข้อความที่ดึงมาอาจไม่ใช่ต้นฉบับที่อ่านได้";
