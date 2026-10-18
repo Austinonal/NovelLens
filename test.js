@@ -45,7 +45,7 @@ const evidence = api.feelEvidence(api.SAMPLE_TEXT);
 assert(evidence.length > 0 && evidence[0].terms.length > 0, "analysis provides explicit keywords supporting a tone");
 assert(api.classifyEvidence(evidence).label, "genre evidence is labelled with cautious strength");
 
-\n// ReadAWrite importer UI and local-only storage contract
+// ReadAWrite importer UI and local-only storage contract
 assert(html.includes('id="t-import"') && html.includes('id="p-import"'), "ReadAWrite library tab and panel exist");
 assert(html.includes("novellens.readawrite.imports.v1"), "imports persist in browser-local storage");
 assert(html.includes("saveReadAWriteImport") && html.includes("sourceUrl:location.href"), "bookmarklet sends source metadata for chapter imports");
