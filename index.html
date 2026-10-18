@@ -150,6 +150,7 @@ summary{cursor:pointer;font-weight:600;padding:4px 0}
       </div>
       <div class="scol">
         <h2 class="stitle">พล็อต</h2>
+        <p class="note">โหมดสร้างตามกฎ (Procedural) · คำนวณในเครื่องทั้งหมด ไม่ใช้ AI ไม่ต้องใช้คีย์ ไม่ส่งข้อมูลตัวละครออกไปไหน ใช้ออฟไลน์ได้</p>
         <div id="plotForm" class="form"></div>
         <div class="row"><button id="gen">สร้างพล็อต</button><button id="useRef" class="ghost">ใช้แนวจากผลวิเคราะห์</button></div>
         <div class="status" id="sstatus" role="status"></div>
@@ -456,8 +457,13 @@ if (!window.opener) src.value = SAMPLE_TEXT;
 updateCount(); run();
 </script>
 <script>
-// ===== Studio engine: build characters and a plot from templates, no AI =====
-const pick = a => a[Math.floor(Math.random() * a.length)];
+// ===== Studio engine: build characters and a plot from rules, no AI, no network =====
+// Seeded randomness: the same seed and the same inputs give the same plot
+let rand = Math.random;
+const hash = s => { let h = 2166136261; for (const ch of String(s)) h = Math.imul(h ^ ch.codePointAt(0), 16777619); return h >>> 0; };
+const seeded = s => { let a = hash(s); return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
+const pick = a => a[Math.floor(rand() * a.length)];
+const wpick = a => { let r = rand() * a.reduce((n, x) => n + x.w, 0); return a.find(x => (r -= x.w) < 0) || a[0]; };
 const POOL = {
   name: "พิมพ์ดาว ภูผา ธาม ใบบัว ณดา ปรานต์ วายุ ลลิล ธีร์ เมฆา อัญญา คิริน ภาคิน ต้นกล้า ปิ่นมุก รวิ".split(" "),
   nick: "ดาว ผา ธาม บัว ดา ปราณ ยุ ลิล ธีร์ เมฆ ญา คิว คิน กล้า ปิ่น รวิ".split(" "),
@@ -487,7 +493,7 @@ const FIELDS = [
   ["อื่นๆ", [["skill","ทักษะเด่น"],["item","ของสำคัญ"],["note","บันทึกเพิ่มเติม"]]]
 ];
 const rollField = (c, k) => {
-  if (k === "traits") c.traits = [...POOL.traits].sort(() => Math.random() - .5).slice(0, 3);
+  if (k === "traits") c.traits = [...POOL.traits].sort(() => rand() - .5).slice(0, 3);
   else if (k === "gender" || k === "role") c[k] = pick(FIELDS.flatMap(g => g[1]).find(f => f[0] === k)[2]);
   else if (POOL[k]) c[k] = pick(POOL[k]);
 };
@@ -551,28 +557,335 @@ const CONFLICTS = {"คนกับคน":"คู่แข่งที่ยั
 
 const fill = (s, ctx) => s.replace(/\{(\w+)\}/g, (_, k) => ctx[k] ?? "");
 
-function generate(st){
+// ----- Psychology: traits and flaws decide how a character acts when pushed -----
+const LEAN = {ใจดี:"ally", ขี้เล่น:"ally", มองโลกในแง่ดี:"ally", ใจอ่อนเกินไป:"ally", เย็นชา:"hide", ขี้อาย:"hide", พูดน้อย:"hide", ขี้กังวล:"hide", ไม่ไว้ใจใคร:"hide", หนีปัญหา:"hide", ยึดติดอดีต:"hide",
+  มั่นใจ:"confront", ใจร้อน:"confront", ดื้อ:"confront", กล้าหาญ:"confront", หยิ่งไม่ยอมขอโทษ:"confront", ขี้หึง:"confront", อยากชนะทุกเรื่อง:"confront",
+  ช่างสังเกต:"probe", รอบคอบ:"probe", ฉลาด:"probe", ซื่อสัตย์:"confess", เจ้าเล่ห์:"scheme", โกหกเก่งเกินไป:"scheme"};
+const LEAN_NAME = {confront:"เผชิญหน้าตรงๆ", hide:"เก็บเรื่องไว้คนเดียว", ally:"พึ่งคนอื่น", probe:"สืบให้แน่ก่อน", confess:"พูดความจริง", scheme:"วางแผนลับ"};
+// [what the character does, what it causes]
+const ACTS = {
+  confront: [["{H}เลือกเผชิญหน้า{V}ตรงๆ", "{V}รู้ตัวและตอบโต้หนักกว่าเดิม"], ["{H}บุกไปถามความจริงจาก{V}กลางที่สาธารณะ", "ทุกคนที่{place}เริ่มเลือกข้าง"]],
+  hide: [["{H}เก็บเรื่องไว้คนเดียว ไม่บอกแม้แต่{A}", "ปัญหาลุกลามเพราะไม่มีใครรู้ทันเวลา"], ["{H}ถอยออกมาและแกล้งทำเป็นไม่สนใจ", "{V}ได้เวลาเตรียมตัวเพิ่ม"]],
+  ally: [["{H}ขอให้{A}ช่วย", "{A}ต้องเสี่ยงไปด้วย และทั้งคู่ผูกพันกันมากขึ้น"], ["{H}รวมคนที่{place}มาช่วยกัน", "เรื่องรู้ไปถึงหู{V}เร็วกว่าที่คิด"]],
+  probe: [["{H}แอบสืบเรื่องให้แน่ก่อนลงมือ", "ได้ข้อมูลสำคัญ แต่เสียเวลาจน{V}นำไปอีกก้าว"], ["{H}เฝ้าดู{V}เงียบๆ หลายวัน", "เห็นจุดอ่อนหนึ่งอย่าง แต่ก็ถูกจับได้ว่าตามดู"]],
+  confess: [["{H}พูดความจริงกับ{A} ทั้งที่รู้ว่าต้องเสียบางอย่าง", "ได้ความไว้ใจกลับมา แต่ความลับบางส่วนรั่วไปถึง{V}"], ["{H}ยอมรับผิดต่อหน้าทุกคน", "ภาพลักษณ์พัง แต่ไม่มีใครใช้เรื่องนี้ขู่ได้อีก"]],
+  scheme: [["{H}วางแผนหลอก{V}ให้เดินผิดทาง", "แผนได้ผล แต่ทิ้งร่องรอยที่จะย้อนกลับมาหาตัว"], ["{H}โกหก{A}เพื่อกันไม่ให้เข้ามายุ่ง", "{A}รู้ทีหลังและเริ่มไม่ไว้ใจ"]]
+};
+const OPPOSITE = {confront:"probe", hide:"confess", ally:"confront", probe:"confront", confess:"ally", scheme:"confess"};
+const leansOf = c => [...(c.traits || []), c.flaw].map(t => LEAN[t]).filter(Boolean);
+const CLASH = [["ซื่อสัตย์","เจ้าเล่ห์"],["ใจร้อน","รอบคอบ"],["มั่นใจ","ขี้กังวล"],["ขี้เล่น","เย็นชา"],["มองโลกในแง่ดี","ไม่ไว้ใจใคร"],["ใจดี","อยากชนะทุกเรื่อง"]];
+
+// Central conflicts come from clashes between characters' wants, values and secrets
+function conflictsOf(H, cs){
+  const out = [], mine = [...(H.traits || []), H.flaw];
+  for (const c of cs) if (c !== H) {
+    const theirs = [...(c.traits || []), c.flaw];
+    if (c.want && c.want === H.want) out.push({kind: "rival", who: c.name, w: 3, why: `${H.name}กับ${c.name}ต่างอยาก${c.want} แต่มีได้แค่คนเดียว`});
+    if (c.role === "ตัวร้าย") out.push({kind: "oppose", who: c.name, w: 3, why: `${c.name}ต้องการ${c.want || "สิ่งที่" + H.name + "ปกป้อง"} ซึ่งสวนทางกับการที่${H.name}จะ${H.want}`});
+    for (const [x, y] of CLASH) {
+      const [a, b] = mine.includes(x) && theirs.includes(y) ? [x, y] : mine.includes(y) && theirs.includes(x) ? [y, x] : [];
+      if (a) out.push({kind: "clash", who: c.name, w: 2, why: `${H.name}${a} แต่${c.name}${b} ทุกการตัดสินใจร่วมกันจึงปะทะ`});
+    }
+    if (c.secret) out.push({kind: "secret", who: c.name, w: 1, why: `${c.name}ซ่อนความจริงว่า${c.secret} ซึ่งจะสั่นคลอนสิ่งที่${H.name}เชื่อ`});
+  }
+  out.push({kind: "inner", who: H.name, w: out.length ? .5 : 2, why: `${H.name}อยาก${H.want} แต่ทางไปต้องผ่านสิ่งที่กลัวที่สุดคือ${H.fear}`});
+  return out;
+}
+
+// ----- Twists: what readers and characters believe, what is true, and the clues that support it -----
+const TWISTS = {
+  identity: {name: "ตัวตนที่ซ่อนอยู่", needs: "A", make: x => ({reader: `${x.A}เป็นพันธมิตรที่ไว้ใจได้`, chars: `${x.H}เชื่อว่า${x.A}บังเอิญเข้ามาในชีวิต`, truth: `${x.A}ถูกส่งมาโดยฝ่ายของ${x.V}ตั้งแต่แรก`, missed: `${x.A}ช่วยจริงทุกครั้ง จึงไม่มีใครสงสัย`, stakes: `${x.H}ต้องเลือกว่าจะเชื่อ${x.A}ที่ช่วยมาตลอด หรือหลักฐานตรงหน้า`,
+    clues: [`${x.A}รู้ทางลัดของ${x.place}ทั้งที่บอกว่าเพิ่งมาครั้งแรก`, `${x.A}หายไปช่วงสั้นๆ ทุกครั้งก่อน${x.V}ขยับ`, `${x.A}เรียกชื่อเล่นของ${x.V}โดยไม่ตั้งใจ`]})},
+  motive: {name: "แรงจูงใจที่ตีความผิด", make: x => ({reader: `${x.V}ขวางทางเพราะอยากได้ประโยชน์`, chars: `${x.H}เชื่อว่า${x.V}อยากทำลายตัวเอง`, truth: `${x.V}ขวางเพราะรู้ว่าถ้า${x.H}${x.want}สำเร็จ ความลับที่ว่า${x.H}${x.secret}จะถูกเปิดโปง`, missed: `${x.H}ไม่เคยถามเหตุผลของ${x.V}เลย`, stakes: `ชัยชนะของ${x.H}อาจทำร้ายตัวเองมากกว่าความพ่ายแพ้`,
+    clues: [`${x.V}ทำลายแผนของ${x.H}แต่ไม่เคยทำร้าย${x.H}ตรงๆ`, `${x.V}จ้อง${x.item}ของ${x.H}นานผิดสังเกต`, `${x.V}พูดลอยๆ ว่าบางเรื่องไม่รู้จะดีกว่า`]})},
+  betrayal: {name: "การหักหลัง", needs: "A", make: x => ({reader: `${x.A}อยู่ข้าง${x.H}`, chars: `${x.H}มั่นใจใน${x.A}ที่สุด`, truth: `${x.A}แอบร่วมมือกับ${x.V} เพื่อ${x.Awant}`, missed: `${x.H}มัวห่วงเป้าหมายตัวเองจนไม่เห็นว่า${x.A}ก็มีสิ่งที่อยากได้`, stakes: `${x.H}เสียพันธมิตรหลัก และต้องสู้ต่อด้วยตัวเอง`,
+    clues: [`${x.A}พูดถึงความฝันที่จะ${x.Awant}แล้วเงียบไป`, `${x.A}ถามถึงแผนของ${x.H}ละเอียดเกินไป`, `${x.A}รู้เรื่องที่${x.H}เล่าให้ฟังแค่คนเดียว`]})},
+  unreliable: {name: "ความทรงจำที่เชื่อไม่ได้", make: x => ({reader: `เรื่องที่${x.H}${x.wound}เป็นอย่างที่${x.H}เล่า`, chars: `${x.H}เชื่อความทรงจำตัวเองทั้งหมด`, truth: `${x.H}จำเหตุการณ์ตอนนั้นผิด และคนที่ผิดจริงไม่ใช่คนที่${x.H}โทษมาตลอด`, missed: `ความกลัว${x.fear}ทำให้${x.H}ไม่กล้าย้อนดูอดีต`, stakes: `${x.H}ต้องตั้งเป้าหมายใหม่ เพราะความแค้นเดิมไม่มีที่มา`,
+    clues: [`รายละเอียดในคำเล่าของ${x.H}ไม่ตรงกันสองครั้ง`, `${x.item}มีร่องรอยที่ขัดกับเรื่องที่${x.H}จำได้`, `คนเก่าแก่ที่${x.place}เล่าเหตุการณ์เดียวกันต่างไป`]})},
+  kin: {name: "ความสัมพันธ์ที่ซ่อนไว้", needs: "AV", asserts: x => [x.Aname, "พี่น้อง"], make: x => ({reader: `${x.A}กับ${x.V}ไม่เคยรู้จักกัน`, chars: `${x.H}คิดว่าทั้งสองเป็นคนแปลกหน้ากัน`, truth: `${x.A}กับ${x.V}เป็นพี่น้องที่ถูกแยกกันตั้งแต่เด็ก`, missed: `ทั้งคู่ใช้นามสกุลต่างกันและเลี่ยงการเจอหน้ากัน`, stakes: `${x.A}ต้องเลือกระหว่าง${x.H}กับครอบครัว`,
+    clues: [`${x.A}กับ${x.V}มีท่าทางเล็กๆ เหมือนกันอย่างประหลาด`, `${x.A}ไม่ยอมให้ใครทำร้าย${x.V}ถึงตาย`, `${x.A}รู้ว่า${x.V}แพ้อะไรโดยไม่มีใครบอก`]})},
+  evidence: {name: "หลักฐานที่ความหมายเปลี่ยน", make: x => ({reader: `${x.item}เป็นแค่ของที่ระลึก`, chars: `ทุกคนมองข้าม${x.item}`, truth: `${x.item}คือหลักฐานที่ผูก${x.V}ไว้กับเรื่องที่${x.H}${x.wound}`, missed: `มันอยู่กับ${x.H}มานานจนกลายเป็นของธรรมดา`, stakes: `${x.item}กลายเป็นสิ่งที่${x.V}ต้องแย่งให้ได้`,
+    clues: [`${x.V}เหลือบมอง${x.item}ทุกครั้งที่เจอ${x.H}`, `บน${x.item}มีรอยที่${x.H}ไม่เคยสังเกต`, `มีคนเสนอซื้อ${x.item}ในราคาสูงผิดปกติ`]})},
+  assumption: {name: "สมมติฐานที่ผิด", make: x => ({reader: `ต้นเหตุของปัญหาคือ${x.V}`, chars: `ทุกคนเชื่อว่า${x.V}อยู่เบื้องหลัง`, truth: `${x.V}ก็เป็นเหยื่อ ต้นเหตุจริงคือกฎของ${x.place}ที่ทุกคนยอมรับมาตลอด`, missed: `ทุกคนอยากได้คนผิดที่จับต้องได้`, stakes: `ศัตรูกลายเป็นพันธมิตรที่จำเป็น`,
+    clues: [`${x.V}ก็เสียหายจากเหตุการณ์แรกเหมือนกัน`, `เรื่องแบบเดียวกันเคยเกิดที่${x.place}ก่อน${x.V}จะมา`, `บันทึกเก่าของ${x.place}มีหน้าหนึ่งถูกฉีกออก`]})},
+  moral: {name: "ความถูกผิดที่กลับด้าน", make: x => ({reader: `การที่${x.H}${x.want}เป็นเรื่องถูก`, chars: `${x.H}เชื่อว่ากำลังทำสิ่งที่ถูก`, truth: `ถ้า${x.H}${x.want}สำเร็จ คนบริสุทธิ์ที่${x.place}ต้องรับผลแทน`, missed: `${x.H}มองแต่เป้าหมาย ไม่เคยดูว่าใครต้องจ่าย`, stakes: `${x.H}ต้องเลือกระหว่างเป้าหมายกับคนอื่น`,
+    clues: [`คนที่${x.place}ดูกังวลทุกครั้งที่${x.H}ใกล้สำเร็จ`, `${x.A}เตือนเบาๆ ว่าบางอย่างได้มาต้องมีคนเสีย`, `มีครอบครัวหนึ่งย้ายออกจาก${x.place}กะทันหัน`]})},
+  priority: {name: "สิ่งที่ตัวละครเลือกจริงๆ", needs: "A", make: x => ({reader: `${x.A}จะเลือก${x.H}เสมอ`, chars: `${x.H}คิดว่ารู้ใจ${x.A}`, truth: `เมื่อถูกบีบ ${x.A}เลือก${x.Awant}ก่อน${x.H}`, missed: `ยังไม่เคยมีวันที่ต้องเลือกจริงๆ`, stakes: `${x.H}รู้ว่าต้องพึ่งตัวเอง`,
+    clues: [`${x.A}ลังเลทุกครั้งที่ต้องเสียสละเพื่อคนอื่น`, `${x.A}เก็บทางหนีไว้ส่วนตัว`, `${x.A}เคยทิ้งเพื่อนเก่าไว้ในเหตุการณ์คล้ายกัน`]})},
+  impossible: {name: "เหตุการณ์ที่เป็นไปไม่ได้", genres: ["ลึกลับ","น่ากลัว","แอ็กชัน/แฟนตาซี"], make: x => ({reader: `มีสิ่งเหนือธรรมชาติอยู่ใน${x.place}`, chars: `${x.H}เห็นสิ่งที่เป็นไปไม่ได้กับตา`, truth: `มีคนจัดฉากโดยใช้ความลับของ${x.place}ที่มีแต่${x.V}รู้`, missed: `ทุกคนกลัวเกินกว่าจะเข้าไปดูใกล้ๆ`, stakes: `${x.H}รู้ว่าศัตรูเป็นคน และคนแพ้ได้`,
+    clues: [`เหตุประหลาดเกิดเฉพาะคืนที่${x.V}ไม่อยู่ให้เห็น`, `มีรอยเท้าคนใกล้จุดที่เกิดเรื่อง`, `เสียงประหลาดดังซ้ำเป็นจังหวะเดิมทุกครั้ง`]})}
+};
+// A twist must not break what the profile already says
+const CONTRA = [[/ลูกคนเดียว/, "พี่น้อง"]];
+const MIN_CLUES = {loose: 1, normal: 2, strict: 3};
+
+function twistWeight(k, x, genre, last){
+  const t = TWISTS[k];
+  if (t.genres && !t.genres.includes(genre)) return 0;
+  if (t.needs?.includes("A") && !x.hasA || t.needs?.includes("V") && !x.hasV) return 0;
+  let w = 1;
+  if (["identity","betrayal","priority"].includes(k) && x.Atraits.includes("ซื่อสัตย์")) w = 0; // out of character
+  if (k === "identity" && x.Asecret === "เคยเป็นคนของฝ่ายศัตรู") w = 3;
+  if (k === "unreliable" && x.flaw === "ยึดติดอดีต") w = 3;
+  if (k === "motive" && x.hasV) w = 2;
+  if (genre === "ลึกลับ" && ["evidence","identity","impossible"].includes(k)) w *= 2;
+  return k === last ? w * .2 : w; // avoid the same mechanism twice in a row
+}
+
+// ----- Build one candidate -----
+const ABSENT = /จากไป|พาตัวไป|หายตัว|บาดเจ็บหนัก/;
+function build(st, seed, last){
+  rand = seeded(seed);
   const cs = st.chars.filter(c => c.name);
-  const H = cs.find(c => c.role === "ตัวเอก") || cs[0];
-  if (!H) return null;
-  const Vc = cs.find(c => c !== H && c.role === "ตัวร้าย");
-  const A = cs.find(c => c !== H && c !== Vc && ["คู่พระ/นาง","เพื่อนสนิท","ผู้ชี้ทาง"].includes(c.role)) || cs.find(c => c !== H && c !== Vc);
-  const p = st.plot, g = PLOTS[p.genre];
-  const ctx = {H:H.name, A:A?.name || "คนแปลกหน้าคนหนึ่ง", place:p.setting || pick(g.places)};
-  for (const k of ["want","fear","flaw","secret","wound","item","skill"]) ctx[k] = H[k] || pick(POOL[k]);
-  ctx.V = Vc?.name || fill(CONFLICTS[p.conflict], ctx);
-  const pools = {...BEATS, inciting:g.inciting, mid:g.mid, low:g.low, climax:g.climax, resolve:ENDINGS[p.ending]};
-  const [sName, beats] = STRUCTURES[p.structure], n = beats.length, N = Math.max(1, +p.chapters || n);
-  const outline = beats.map(([title, slot], i) => {
+  const H0 = cs.find(c => c.role === "ตัวเอก") || cs[0];
+  const Vc = cs.find(c => c !== H0 && c.role === "ตัวร้าย");
+  const Ac = cs.find(c => c !== H0 && c !== Vc && ["คู่พระ/นาง","เพื่อนสนิท","ผู้ชี้ทาง"].includes(c.role)) || cs.find(c => c !== H0 && c !== Vc);
+  const p = st.plot, g = PLOTS[p.genre] || PLOTS["รัก/ละมุน"];
+  const H = {...H0};
+  for (const k of ["want","fear","flaw","secret","wound","item","skill"]) H[k] ||= pick(POOL[k]);
+  const ctx = {H: H.name, A: Ac?.name || "คนแปลกหน้าคนหนึ่ง", place: p.setting || pick(g.places)};
+  for (const k of ["want","fear","flaw","secret","wound","item","skill"]) ctx[k] = H[k];
+  ctx.V = Vc?.name || fill(CONFLICTS[p.conflict] || CONFLICTS["คนกับคน"], ctx);
+  const x = {...ctx, hasA: !!Ac, hasV: !!Vc, Aname: Ac?.name, Atraits: Ac?.traits || [], Asecret: Ac?.secret, Awant: Ac?.want || "เอาตัวรอด", Afamily: Ac?.family || ""};
+  const cast = [H, ...cs.filter(c => c !== H0)];
+  const conflict = wpick(conflictsOf(H, cast));
+
+  // Narrative functions: the chosen structure, plus decision beats that grow with complexity
+  const [sName, slots] = STRUCTURES[p.structure] || STRUCTURES.three;
+  const seq = [...slots];
+  const at = seq.findIndex(s => s[1] === "tests");
+  for (let i = 1; i < (+p.complexity || 2); i++) seq.splice(at + i, 0, ["ทางเลือก", "decide"]);
+  const pools = {...BEATS, inciting: g.inciting, mid: g.mid, low: g.low, climax: g.climax, resolve: ENDINGS[p.ending] || ENDINGS["สุขนิยม"]};
+  const myLeans = leansOf(H), flawLean = LEAN[H.flaw] || "hide", arcLean = OPPOSITE[flawLean];
+  const WHY = {open: `สถานะตั้งต้น: ${H.name}อยาก${H.want} แต่กลัว${H.fear}`, inciting: "ความขัดแย้งหลักปะทุ: " + conflict.why, refuse: `ความกลัว${H.fear}ทำให้ลังเล`,
+    ally: `${H.name}ต้องการคนช่วยเพื่อ${H.want}`, cross: `${H.name}ยอมเสี่ยงเพราะอยาก${H.want}`, tests: "ผลจากการตัดสินใจก่อนหน้า", mid: "ข้อมูลใหม่เปลี่ยนเกม",
+    low: `ราคาของนิสัย${H.flaw}`, climax: `${H.name}ต้องเลือกครั้งสุดท้าย หลังเจ็บจากผลของนิสัย${H.flaw}`, resolve: "ผลของการเลือกในไคลแมกซ์ ตอบความขัดแย้งหลัก"};
+  const N = Math.max(1, +p.chapters || seq.length), n = seq.length;
+  const outline = seq.map(([title, slot], i) => {
     const a = Math.floor(i * N / n) + 1, b = Math.max(a, Math.floor((i + 1) * N / n));
-    return {title, chapters: a === b ? "ตอนที่ " + a : "ตอนที่ " + a + "–" + b, text: fill(pick(pools[slot]), ctx)};
+    const o = {title, slot, chapters: a === b ? "ตอนที่ " + a : "ตอนที่ " + a + "–" + b, part: i < n / 3 ? "ต้นเรื่อง" : i < n * 2 / 3 ? "กลางเรื่อง" : "ท้ายเรื่อง",
+      cause: i ? [i - 1] : [], why: WHY[slot] || "", add: [], uses: [], learns: [], actors: [H.name]};
+    roll(o, pools, x, myLeans);
+    return o;
   });
+  outline.forEach((o, i) => { if (i) o.why ||= "ผลจาก " + outline[i - 1].title; });
+
+  // Arc: the climax choice goes against the flaw, and the plot says why
+  const climax = outline.find(o => o.slot === "climax") || outline.at(-2) || outline[0];
+  climax.lean = arcLean; climax.arc = true;
+  climax.add.push(`ครั้งนี้${H.name}ไม่${LEAN_NAME[flawLean]}อีกแล้ว แต่เลือก${LEAN_NAME[arcLean]}`);
+
+  // Twist and clues
+  const keys = p.twist === "none" ? [] : p.twist && TWISTS[p.twist] ? [p.twist] : Object.keys(TWISTS);
+  const opts = keys.map(k => ({k, w: twistWeight(k, x, p.genre, last)})).filter(o => o.w > 0 || keys.length === 1);
+  let twist = null;
+  if (opts.length) {
+    const k = wpick(opts.map(o => ({...o, w: o.w || 1}))).k, T = TWISTS[k];
+    const mystery = p.genre === "ลึกลับ";
+    let r = outline.findIndex(o => o.slot === (mystery ? "climax" : "mid"));
+    if (r < 1) r = outline.findIndex(o => o.slot === "mid");
+    if (r < 1) r = Math.max(1, n - 2);
+    twist = {key: k, name: T.name, ...T.make(x), reveal: r, asserts: T.asserts?.(x), clueAt: []};
+    const rv = outline[r];
+    rv.add.push("ความจริงเปิดเผย: " + twist.truth); rv.learns.push("twist");
+    const after = outline[r + 1] || rv;
+    after.add.push("หลังรู้ความจริง " + twist.stakes); after.uses.push("twist");
+    const slotsBefore = [...Array(r).keys()].filter(i => i > 0);
+    const spots = (slotsBefore.length >= 2 ? slotsBefore : [...Array(r).keys()]).sort(() => rand() - .5).sort((a, b) => a - b);
+    const need = Math.min(MIN_CLUES[p.strictness] || 2, twist.clues.length);
+    for (let c = 0; c < need && spots.length; c++) {
+      const i = spots[c % spots.length];
+      outline[i].add.push("เบาะแส: " + twist.clues[c]); twist.clueAt.push(i);
+    }
+    rv.cause = [...new Set([...rv.cause, ...twist.clueAt])];
+    if (mystery) {
+      const R = cast.find(c => c.name !== H.name && c.name !== Ac?.name && c.name !== Vc?.name) || (k === "identity" ? Vc : Ac);
+      const ri = spots.find(i => !twist.clueAt.includes(i)) ?? spots[0];
+      if (R && ri != null) {
+        twist.herring = {text: `${R.name}มีพิรุธ เพราะพยายามปิดเรื่องที่ว่า${R.secret || "ไปอยู่ที่ไหนคืนนั้น"}`, why: "เป็นเรื่องส่วนตัวที่ไม่เกี่ยวกับคดี ควรให้ตัวละครคลายข้อสงสัยนี้ก่อนหรือพร้อมเฉลย", at: ri};
+        outline[ri].add.push("เบาะแสหลอก: " + twist.herring.text);
+      }
+    }
+  }
+  outline.forEach(sync);
+  return {seed, ctx, x, H, Ac: Ac?.name, conflict, outline, twist, structure: sName, genre: p.genre, ending: p.ending, cast, arcLean, flawLean};
+}
+
+// Pick a template for a beat. Decision beats come from the character's own leanings.
+function roll(o, pools, x, myLeans){
+  if (o.slot === "decide") {
+    o.lean = myLeans.length ? pick(myLeans) : "probe";
+    o.tpl = Math.floor(rand() * ACTS[o.lean].length);
+    const [act, res] = ACTS[o.lean][o.tpl];
+    o.base = fill(act, x); o.change = fill(res, x);
+    o.why = `นิสัยของ${x.H}ทำให้เลือก${LEAN_NAME[o.lean]}`;
+  } else {
+    const pool = pools[o.slot] || pools.tests;
+    o.tpl = Math.floor(rand() * pool.length);
+    o.base = fill(pool[o.tpl], x);
+  }
+  o.absent = o.slot !== "resolve" && x.hasA && ABSENT.test(o.base) && o.base.includes(x.A) ? [x.A] : [];
+  o.uses = o.uses.filter(u => u !== "skill");
+  if (o.base.includes(x.skill)) o.uses.push("skill");
+}
+const sync = o => { o.text = [o.base, ...o.add].join(" "); return o; };
+
+// ----- Validation: transparent rules, each issue names the beat and the rule -----
+const RULES = {
+  cause: "ทุกเหตุการณ์หลังเปิดเรื่องต้องมีเหตุที่มาก่อน",
+  knowledge: "ตัวละครใช้ข้อมูลหรือทักษะได้หลังจากเรื่องได้ปูไว้แล้วเท่านั้น",
+  presence: "ตัวละครที่หายไปต้องกลับมาก่อนจะปรากฏอีก",
+  motive: "ตัวร้ายต้องมีสิ่งที่อยากได้",
+  setup: "จุดหักมุมต้องมีเบาะแสก่อนเฉลยตามจำนวนที่กำหนด",
+  contradiction: "จุดหักมุมต้องไม่ขัดกับข้อมูลตัวละคร",
+  timeline: "ตอนต้องเรียงตามลำดับ และเบาะแสต้องมาก่อนเฉลย",
+  character: "การกระทำต้องตรงกับนิสัย ยกเว้นจุดเปลี่ยนที่เรื่องอธิบายไว้",
+  ending: "ตอนจบต้องตอบความขัดแย้งหลัก",
+  repeat: "ไม่ใช้เหตุการณ์หรือการตัดสินใจแบบเดิมซ้ำ",
+  forbidden: "ไม่มีสิ่งที่ผู้ใช้ห้ามไว้"
+};
+function validate(s, plot = {}){
+  const issues = [], O = s.outline, add = (rule, i, msg, level = "error") => issues.push({rule, beat: i, msg, level});
+  const known = new Set(), gone = new Set();
+  const ban = String(plot.forbidden || "").split(/[,，\n]/).map(w => w.trim()).filter(Boolean);
+  const leans = leansOf(s.H);
+  let lastCh = 0;
+  O.forEach((o, i) => {
+    if (i && !o.cause?.length) add("cause", i, `"${o.title}" ไม่มีเหตุที่มาก่อน`);
+    if (o.cause?.some(c => c >= i)) add("timeline", i, `"${o.title}" อ้างเหตุที่เกิดทีหลัง`);
+    const ch = +String(o.chapters).match(/\d+/)?.[0] || 0;
+    if (ch < lastCh) add("timeline", i, `"${o.title}" อยู่ก่อนตอนที่ ${lastCh}`); lastCh = ch;
+    for (const u of o.uses || []) if (!known.has(u) && !(o.learns || []).includes(u))
+      add("knowledge", i, u === "skill" ? `${s.H.name}ใช้ทักษะ${s.x.skill}โดยไม่เคยถูกปูมาก่อน` : `${s.H.name}รู้ความจริงก่อนที่เรื่องจะเฉลย`);
+    for (const g of gone) if (o.text.includes(g) && !(o.returns || []).includes(g)) add("presence", i, `${g}หายไปแล้วแต่กลับมาปรากฏใน "${o.title}" โดยไม่มีคำอธิบาย`);
+    for (const r of o.returns || []) gone.delete(r);
+    for (const a of o.absent || []) gone.add(a);
+    for (const l of o.learns || []) known.add(l);
+    if (o.text.includes(s.x.skill)) known.add("skill");
+    if (o.lean && !o.arc && leans.length && !leans.includes(o.lean)) add("character", i, `${s.H.name}เลือก${LEAN_NAME[o.lean]} ซึ่งไม่ตรงกับนิสัย`, "warn");
+    for (const w of ban) if (o.text.includes(w)) add("forbidden", i, `มีคำต้องห้าม "${w}"`);
+    if (O.findIndex(q => q.base === o.base) < i) add("repeat", i, `"${o.title}" ซ้ำกับเหตุการณ์ก่อนหน้า`, "warn");
+  });
+  const dec = O.filter(o => o.slot === "decide").map(o => o.lean);
+  if (dec.length >= 3 && new Set(dec).size === 1) add("repeat", null, "ทางเลือกทุกครั้งเป็นแบบเดียวกัน เรื่องจะดูซ้ำซาก", "warn");
+  for (const c of s.cast) if (c.role === "ตัวร้าย" && !c.want) add("motive", null, `${c.name}เป็นตัวร้ายแต่ยังไม่มีสิ่งที่อยากได้`, "warn");
+  const t = s.twist;
+  if (t) {
+    const before = t.clueAt.filter(i => i < t.reveal);
+    if (before.length < (MIN_CLUES[plot.strictness] || 2)) add("setup", t.reveal, `จุดหักมุม "${t.name}" มีเบาะแสก่อนเฉลยแค่ ${before.length} จุด`);
+    if (t.clueAt.some(i => i >= t.reveal)) add("timeline", t.reveal, "มีเบาะแสวางหลังเฉลย");
+    if (t.asserts) {
+      const who = s.cast.find(c => c.name === t.asserts[0]);
+      for (const [re, word] of CONTRA) if (t.asserts[1].includes(word) && re.test(who?.family || "")) add("contradiction", t.reveal, `จุดหักมุมบอกว่า${who.name}มี${word} แต่ประวัติบอกว่า "${who.family}"`);
+    }
+  }
+  const end = O.at(-1);
+  if (s.ending !== "ปลายเปิด" && !end.addresses) add("ending", O.length - 1, "ตอนจบยังไม่ตอบความขัดแย้งหลัก");
+  return issues;
+}
+
+// Repair: fix only the beat a rule points to, never the whole plot
+function repair(s, plot, issues, myLeans){
+  const pools = {...BEATS, ...PLOTS[s.genre], resolve: ENDINGS[s.ending] || ENDINGS["สุขนิยม"]};
+  for (const is of issues) {
+    const o = s.outline[is.beat];
+    if (is.rule === "knowledge" && o?.uses.includes("skill")) {
+      const prev = s.outline.slice(1, is.beat).find(q => q.slot === "tests" || q.slot === "decide") || s.outline[0];
+      prev.add.push(`${s.H.name}เริ่มฝึก${s.x.skill}อย่างจริงจัง`); sync(prev);
+    } else if (is.rule === "presence" && o) {
+      const back = s.outline.slice(0, is.beat).reverse().find(q => q.slot === "climax") || o;
+      const g = [...s.outline.slice(0, is.beat).flatMap(q => q.absent || [])].find(n => o.text.includes(n));
+      (back.returns ||= []).push(g); back.add.push(`และพา${g}กลับมาได้`); sync(back);
+    } else if (is.rule === "setup" && s.twist) {
+      const t = s.twist, free = [...Array(t.reveal).keys()].filter(i => !t.clueAt.includes(i)).reverse();
+      const c = t.clues.find(q => !s.outline.some(b => b.add.includes("เบาะแส: " + q)));
+      if (free.length && c) { s.outline[free[0]].add.push("เบาะแส: " + c); t.clueAt.push(free[0]); sync(s.outline[free[0]]); }
+    } else if ((is.rule === "forbidden" || is.rule === "repeat") && o) {
+      roll(o, pools, s.x, myLeans); sync(o);
+    } else if (is.rule === "ending") {
+      o.add.push(s.conflict.kind === "inner" ? `${s.H.name}ไม่ต้องหนีความกลัว${s.H.fear}อีกต่อไป` : `ความขัดแย้งกับ${s.conflict.who}ได้ข้อยุติ`);
+      o.addresses = s.conflict.kind; sync(o);
+    }
+  }
+}
+
+// ----- Novelty: compact fingerprints of earlier plots, compared with Jaccard overlap -----
+// shortcut: fingerprints spot repeated combinations only; they say nothing about literary originality
+const featuresOf = s => [`g:${s.genre}`, `c:${s.conflict.kind}`, `t:${s.twist?.key || "-"}`, `e:${s.ending}`, `l:${s.arcLean}`, ...s.outline.map(o => `b:${o.slot}${o.lean || ""}${o.tpl}`)];
+const similarity = (a, b) => { const A = new Set(a), B = new Set(b); let n = 0; for (const x of A) if (B.has(x)) n++; return n / (A.size + B.size - n || 1); };
+
+function finish(s, st, history){
+  const p = st.plot, myLeans = leansOf(s.H);
+  let issues = validate(s, p);
+  for (let round = 0; round < 3 && issues.some(i => i.level === "error" || i.rule === "repeat"); round++) { repair(s, p, issues, myLeans); issues = validate(s, p); }
+  s.issues = issues;
+  s.features = featuresOf(s); s.print = hash(s.features.join("|")).toString(36);
+  const near = history.filter(h => h.print !== s.print).map(h => similarity(s.features, h.features));
+  const used = new Set(s.outline.flatMap(o => ["want","fear","flaw","secret","wound","item","skill"].filter(k => o.text.includes(s.H[k]))));
+  const errors = issues.filter(i => i.level === "error").length, warns = issues.length - errors;
+  s.score = {
+    "เหตุและผล": `${s.outline.filter((o, i) => !i || o.cause.length).length}/${s.outline.length} เหตุการณ์มีเหตุ`,
+    "ใช้ข้อมูลตัวละคร": `${used.size}/7 ช่อง`,
+    "เบาะแสก่อนเฉลย": s.twist ? `${s.twist.clueAt.length} จุด` : "ไม่มีจุดหักมุม",
+    "ความใหม่": near.length ? `ซ้ำกับเรื่องเก่ามากสุด ${Math.round(Math.max(...near) * 100)}%` : "ยังไม่มีเรื่องเก่าให้เทียบ",
+    "ปัญหา": `${errors} ร้ายแรง · ${warns} ควรดู`};
+  s.rank = used.size + (s.twist ? 2 : 0) - errors * 10 - (p.strictness === "loose" ? 0 : warns * 2) - (near.length ? Math.max(...near) * 6 : 0);
+  return s;
+}
+
+function generate(st, history = []){
+  if (!st.chars.some(c => c.name)) return null;
+  const p = st.plot, base = p.seed || "auto";
+  const last = history.at(-1)?.features.find(f => f.startsWith("t:"))?.slice(2);
+  const all = Array.from({length: Math.max(1, Math.min(5, +p.candidates || 3))}, (_, k) => finish(build(st, base + (k ? "#" + k : ""), last), st, history));
+  all.sort((a, b) => b.rank - a.rank);
+  const s = all[0];
+  return Object.assign(describe(s, p), {alts: all.slice(1).map(a => describe(a, p))});
+}
+
+// ----- Structured output -----
+function describe(s, p){
+  const {H, x, conflict, twist} = s;
+  const end = s.outline.at(-1);
   const traits = (H.traits || []).join(" ") || "ธรรมดา";
-  const logline = `${H.name}${H.job ? " " + H.job : ""} ผู้${traits} แต่ติดนิสัย${ctx.flaw} ต้องการ${ctx.want} ที่${ctx.place}${Vc || p.conflict !== "คนกับตัวเอง" ? " โดยมี" + ctx.V + "ขวางทาง" : ""} และสิ่งที่ต้องก้าวข้ามคือความกลัว${ctx.fear}`;
-  const links = cs.filter(c => c !== H).map(c => c === Vc
-    ? `${c.name} ขวางทาง${H.name} เพราะอยาก${c.want || "ได้สิ่งเดียวกัน"} และรู้จุดอ่อนคือ${ctx.fear}`
+  const logline = `${H.name}${H.job ? " " + H.job : ""} ผู้${traits} แต่ติดนิสัย${H.flaw} ต้องการ${H.want} ที่${x.place}${x.hasV || p.conflict !== "คนกับตัวเอง" ? " โดยมี" + x.V + "ขวางทาง" : ""} และสิ่งที่ต้องก้าวข้ามคือความกลัว${H.fear}`;
+  const links = s.cast.filter(c => c !== H).map(c => c.role === "ตัวร้าย"
+    ? `${c.name} ขวางทาง${H.name} เพราะอยาก${c.want || "ได้สิ่งเดียวกัน"} และรู้จุดอ่อนคือ${H.fear}`
     : `${c.name} (${c.role || "ตัวละคร"}) ช่วยเติมสิ่งที่${H.name}ขาด ด้วยความ${(c.traits || [])[0] || "จริงใจ"}${c.skill ? " และทักษะ" + c.skill : ""}`);
-  return {logline, premise: p.premise, structure: sName, outline, links, H, cast: cs, tips: TIPS[p.genre]};
+  const leanName = c => LEAN_NAME[leansOf(c)[0]] || "ดูสถานการณ์ก่อน";
+  const titles = [...new Set([`${H.item}ของ${H.name}`, `${x.place}`, `ก่อนที่${H.name}จะ${H.want}`, `ความลับของ${x.A}`, `คืนที่${x.V}มาถึง`])].sort(() => rand() - .5).slice(0, 3);
+  const unused = s.cast.filter(c => c.secret && c.name !== H.name && !s.outline.some(o => o.text.includes(c.secret)));
+  return {
+    seed: s.seed, print: s.print, x, ending: s.ending, genreKey: s.genre, features: s.features, logline, premise: p.premise, structure: s.structure, outline: s.outline, links, H, cast: s.cast, tips: TIPS[s.genre] || TIPS["รัก/ละมุน"],
+    titles, question: `${H.name}จะ${H.want}ได้หรือไม่ ${conflict.kind === "inner" ? "เมื่อทางไปต้องเจอ" + H.fear : "เมื่อ" + conflict.who + "ยืนอยู่ฝั่งตรงข้าม"}`,
+    conflict: conflict.why, genre: `${GENRE[s.genre] || s.genre} · ตอนจบแบบ${s.ending}`,
+    motives: s.cast.map(c => `${c.name}: อยาก${c.want || "(ยังไม่กำหนด)"} · กลัว${c.fear || "-"} · เมื่อถูกบีบมักจะ${leanName(c)}`),
+    opposition: x.hasV ? `${x.V}: อยาก${s.cast.find(c => c.name === x.V)?.want || "(ยังไม่กำหนด)"} ซึ่งได้มาก็ต่อเมื่อ${H.name}ล้มเหลว` : `${x.V} เป็นแรงต้านที่ไม่มีตัวตน`,
+    twist, arcs: [`${H.name}: เริ่มจากชอบ${LEAN_NAME[s.flawLean]}เพราะ${H.flaw} จนเสียหายในช่วงดิ่งสุด แล้วเลือก${LEAN_NAME[s.arcLean]}ในไคลแมกซ์${s.ending === "โศกนาฏกรรม" ? " แต่ช้าเกินกว่าจะรักษาทุกอย่างไว้" : ""}`,
+      ...(twist?.stakes && s.Ac ? [`${s.Ac}: ถูกมองใหม่หลังจุดหักมุม "${twist.name}"`] : [])],
+    consequences: [end.text, twist ? "ผลของจุดหักมุม: " + twist.stakes : ""].filter(Boolean),
+    open: [...unused.map(c => `ความลับที่ว่า${c.name}${c.secret} ยังไม่ถูกเปิด`), ...(s.ending === "ปลายเปิด" ? [`${H.item}ยังมีความหมายที่เรื่องนี้ไม่ได้เฉลย`] : [])],
+    issues: s.issues, rules: RULES, score: s.score
+  };
+}
+
+const look = c => [c.build, c.hair, c.eyes, c.mark, c.style].filter(Boolean).join(" · ");
+const twistRows = t => [["คนอ่านเชื่อว่า", t.reader], ["ตัวละครเชื่อว่า", t.chars], ["ความจริง", t.truth], ["เบาะแสที่ปูไว้", t.clues.slice(0, t.clueAt.length).join(" · ")],
+  ["ทำไมไม่มีใครรู้ก่อน", t.missed], ["ขัดกับข้อมูลเดิมไหม", t.asserts ? "ตรวจกับประวัติครอบครัวแล้ว ดูผลตรวจ" : "ไม่อ้างข้อมูลใหม่เกี่ยวกับตัวละคร"], ["เปลี่ยนเดิมพันอย่างไร", t.stakes]];
+function storyText(s){
+  const t = s.twist;
+  return [
+    "ชื่อเรื่องที่เป็นไปได้: " + (s.titles || []).join(" / "),
+    "แก่นเรื่อง: " + s.logline, s.premise ? "ไอเดียตั้งต้น: " + s.premise : "",
+    s.question ? "คำถามหลัก: " + s.question : "", s.conflict ? "ความขัดแย้งหลัก: " + s.conflict : "", s.genre ? "แนว: " + s.genre : "", "",
+    "ตัวละคร", ...s.cast.map(c => `- ${c.name}${c.nick ? " (" + c.nick + ")" : ""} · ${c.role || ""} · ${c.age ? "อายุ " + c.age : ""} ${c.job || ""}\n  ${look(c)}\n  นิสัย: ${(c.traits || []).join(", ")} · ข้อเสีย: ${c.flaw || "-"}\n  อยากได้: ${c.want || "-"} · กลัว: ${c.fear || "-"} · ปม: ${c.wound || "-"} · ความลับ: ${c.secret || "-"}`),
+    "", "ความสัมพันธ์", ...s.links.map(l => "- " + l),
+    ...(s.motives ? ["", "แรงจูงใจ", ...s.motives.map(m => "- " + m), "- ฝ่ายตรงข้าม: " + s.opposition] : []),
+    "", "โครงเรื่อง (" + s.structure + ")", ...s.outline.map(o => `- ${o.chapters} ${o.title}: ${o.text}${o.why ? "\n  เพราะ: " + o.why : ""}${o.change ? "\n  ผล: " + o.change : ""}`),
+    ...(t ? ["", "จุดหักมุม: " + t.name, ...twistRows(t).map(([k, v]) => `- ${k}: ${v}`), ...(t.herring ? [`- เบาะแสหลอก: ${t.herring.text} (${t.herring.why})`] : [])] : []),
+    ...(s.arcs ? ["", "พัฒนาการตัวละคร", ...s.arcs.map(a => "- " + a)] : []),
+    ...(s.open?.length ? ["", "คำถามที่เหลือไว้ภาคต่อ", ...s.open.map(a => "- " + a)] : [])
+  ].filter(x => x !== null).join("\n");
 }
 
 // ===== Studio UI =====
@@ -648,16 +961,26 @@ function renderPlot(){
     f("ตอนจบ", "p-ending", select("p-ending", p.ending, Object.keys(ENDINGS).map(k => [k, k]), set("ending"))),
     f("จำนวนตอน", "p-chapters", input("p-chapters", p.chapters, set("chapters"), {type: "number", min: "1", max: "200", inputmode: "numeric"})),
     f("ฉาก / โลกของเรื่อง", "p-setting", setting, rollBtn(() => { p.setting = pick(PLOTS[p.genre].places); saveStudio(); renderPlot(); })),
-    f("ไอเดียตั้งต้น", "p-premise", premise));
+    f("ไอเดียตั้งต้น", "p-premise", premise),
+    f("จุดหักมุม", "p-twist", select("p-twist", p.twist || "", [["", "ให้ระบบเลือกตามตัวละคร"], ["none", "ไม่มี"], ...Object.entries(TWISTS).map(([k, t]) => [k, t.name])], set("twist"))),
+    f("ความซับซ้อน", "p-complexity", select("p-complexity", String(p.complexity || 2), [["1", "เรียบง่าย"], ["2", "ปานกลาง (ทางเลือก 1 ครั้ง)"], ["3", "ซับซ้อน (ทางเลือก 2 ครั้ง)"]], set("complexity"))),
+    f("ความเข้มของการตรวจ", "p-strictness", select("p-strictness", p.strictness || "normal", [["loose", "ผ่อน (เบาะแส 1 จุด)"], ["normal", "ปกติ (เบาะแส 2 จุด)"], ["strict", "เข้ม (เบาะแส 3 จุด)"]], set("strictness"))),
+    f("จำนวนพล็อตที่ให้เลือก", "p-candidates", select("p-candidates", String(p.candidates || 3), ["1", "3", "5"].map(v => [v, v + " เรื่อง"]), set("candidates"))),
+    f("สิ่งที่ห้ามมี (คั่นด้วยจุลภาค)", "p-forbidden", input("p-forbidden", p.forbidden, set("forbidden"), {placeholder: "เช่น ตาย, หักหลัง"})),
+    f("เลขสุ่ม (seed)", "p-seed", input("p-seed", p.seed, set("seed"), {placeholder: "ใส่เลขเดิมจะได้พล็อตเดิม"}), rollBtn(() => { p.seed = newSeed(); saveStudio(); renderPlot(); })));
 }
+const newSeed = () => Math.random().toString(36).slice(2, 8);
 
-let lastStory = null;
+let lastStory = studio.story || null;
 function makeStory(refill){
   if (refill) for (const c of studio.chars) for (const [, fields] of FIELDS) for (const [k] of fields) {
     if (k !== "note" && (k === "traits" ? !(c.traits || []).length : !c[k])) rollField(c, k);
   }
-  saveStudio(); renderChar();
-  lastStory = generate(studio);
+  if (!refill || !studio.plot.seed) studio.plot.seed = newSeed();
+  const history = studio.history ||= [];
+  lastStory = generate(studio, history);
+  if (lastStory && !history.some(h => h.print === lastStory.print)) history.splice(0, history.length - 29, {print: lastStory.print, features: lastStory.features});
+  keepStory(); renderChar(); renderPlot();
   renderStory(lastStory);
   sstatus.textContent = refill ? "เติมช่องที่ว่างให้แล้ว แก้ได้ทุกช่องแล้วกดสร้างใหม่" : "";
 }
@@ -669,16 +992,15 @@ $("useRef").onclick = () => {
   sstatus.textContent = "ตั้งแนวเป็น " + GENRE[top[0]] + " ตามผลวิเคราะห์ล่าสุด";
 };
 
-const look = c => [c.build, c.hair, c.eyes, c.mark, c.style].filter(Boolean).join(" · ");
-function storyText(s){
-  return [
-    "แก่นเรื่อง: " + s.logline, s.premise ? "ไอเดียตั้งต้น: " + s.premise : "", "",
-    "ตัวละคร", ...s.cast.map(c => `- ${c.name}${c.nick ? " (" + c.nick + ")" : ""} · ${c.role || ""} · ${c.age ? "อายุ " + c.age : ""} ${c.job || ""}\n  ${look(c)}\n  นิสัย: ${(c.traits || []).join(", ")} · ข้อเสีย: ${c.flaw || "-"}\n  อยากได้: ${c.want || "-"} · กลัว: ${c.fear || "-"} · ปม: ${c.wound || "-"} · ความลับ: ${c.secret || "-"}`),
-    "", "ความสัมพันธ์", ...s.links.map(l => "- " + l),
-    "", "โครงเรื่อง (" + s.structure + ")", ...s.outline.map(o => `- ${o.chapters} ${o.title}: ${o.text}`)
-  ].filter(x => x !== null).join("\n");
+const keepStory = () => { studio.story = lastStory; saveStudio(); };
+// Re-roll one beat with its own seed, then re-check the plot. Nothing else changes.
+function rerollBeat(s, i){
+  const o = s.outline[i];
+  rand = seeded(s.seed + "/" + i + "/" + (o.v = (o.v || 0) + 1));
+  roll(o, {...BEATS, ...PLOTS[s.genreKey], resolve: ENDINGS[s.ending]}, s.x, leansOf(s.H)); sync(o);
+  s.issues = validate(s, studio.plot);
+  keepStory(); renderStory(s);
 }
-
 function renderStory(s){
   if (!s) { $("story").replaceChildren(el("p", {class: "note"}, "ใส่ชื่อตัวละครอย่างน้อยหนึ่งตัวก่อน")); return; }
   const copy = el("button", {class: "ghost"}, "คัดลอกเป็นข้อความ");
@@ -688,25 +1010,49 @@ function renderStory(s){
   };
   const reroll = el("button", {}, "สุ่มเหตุการณ์ใหม่");
   reroll.onclick = () => makeStory(false);
+  const t = s.twist, issues = s.issues || [];
   $("story").replaceChildren(...[
-    el("div", {class: "storyhead"}, el("span", {class: "tag"}, "พล็อตที่สร้าง · " + s.structure), el("p", {class: "logline"}, s.logline),
+    el("div", {class: "storyhead"}, el("span", {class: "tag"}, "พล็อตที่สร้าง · " + s.structure + (s.seed ? " · seed " + s.seed : "")), el("p", {class: "logline"}, s.logline),
       s.premise ? el("p", {class: "note"}, "ไอเดียตั้งต้น: " + s.premise) : null),
+    s.titles ? sec("ภาพรวม", dl([["ชื่อเรื่อง", s.titles.join(" / ")], ["แนว", s.genre], ["คำถามหลัก", s.question], ["ความขัดแย้งหลัก", s.conflict], ["ฝ่ายตรงข้าม", s.opposition]])) : null,
     sec("ตัวละคร", el("div", {class: "chars"}, s.cast.map(c => el("div", {class: "char"},
       el("b", {}, c.name + (c.nick ? " (" + c.nick + ")" : "")), el("span", {class: "role"}, [c.role, c.age && "อายุ " + c.age, c.job].filter(Boolean).join(" · ")),
       look(c) ? el("p", {class: "note"}, look(c)) : null,
       (c.traits || []).length ? el("div", {class: "chips"}, c.traits.map(t => el("span", {}, t))) : null,
       dl([["ข้อเสีย", c.flaw], ["อยากได้", c.want], ["กลัว", c.fear], ["ปมในอดีต", c.wound], ["ความลับ", c.secret], ["ครอบครัว", c.family], ["ทักษะ", c.skill], ["ของสำคัญ", c.item], ["วิธีพูด", c.speech]].filter(x => x[1])))))),
     s.links.length ? sec("ความสัมพันธ์", list(s.links)) : null,
-    sec("โครงเรื่อง", el("ol", {class: "beats"}, s.outline.map(o => el("li", {class: "beat"},
-      el("div", {}, el("b", {}, o.title), el("span", {class: "note"}, o.chapters)), el("p", {}, o.text))))),
-    sec("เคล็ดลับเขียนแนวนี้", list([s.tips.p, s.tips.c, "เลี่ยง: " + s.tips.a])),
+    s.motives ? sec("แรงจูงใจ", list(s.motives)) : null,
+    sec("โครงเรื่อง", el("p", {class: "note"}, "แก้ข้อความในแต่ละเหตุการณ์ได้เลย หรือกดสุ่มใหม่เฉพาะเหตุการณ์นั้น"), el("ol", {class: "beats"}, s.outline.map((o, i) => {
+      const p = el("p", {contenteditable: "true"}, o.text);
+      p.addEventListener("input", () => { o.base = p.textContent; o.add = []; o.text = p.textContent; keepStory(); });
+      const one = el("button", {class: "ghost sm", type: "button"}, "สุ่มใหม่เฉพาะตอนนี้");
+      one.onclick = () => rerollBeat(s, i);
+      return el("li", {class: "beat"},
+        el("div", {}, el("b", {}, o.title), el("span", {class: "note"}, o.chapters + (o.part ? " · " + o.part : ""))),
+        el("div", {}, p, o.why ? el("span", {class: "note"}, "เพราะ: " + o.why + (o.cause?.length ? " (ต่อจาก " + o.cause.map(c => s.outline[c].title).join(", ") + ")" : "")) : null,
+          o.change ? el("span", {class: "note"}, "ผล: " + o.change) : null, s.x ? el("div", {class: "row"}, one) : null));
+    }))),
+    t ? sec("จุดหักมุม: " + t.name, dl(twistRows(t)), t.herring ? el("p", {class: "note"}, `เบาะแสหลอก: ${t.herring.text} · ${t.herring.why}`) : null,
+      s.genreKey === "ลึกลับ" ? el("p", {class: "note"}, `ความยุติธรรมของปริศนา: เบาะแสจริง ${t.clueAt.filter(i => i < t.reveal).length} จุดก่อนเฉลย${issues.some(i => i.rule === "setup" || i.rule === "contradiction") ? " · ยังไม่ผ่าน ดูผลตรวจ" : " · ผู้อ่านไขได้จากเบาะแสในเรื่อง"}`) : null) : null,
+    s.arcs ? sec("พัฒนาการตัวละคร", list(s.arcs)) : null,
+    s.consequences ? sec("ผลลัพธ์ตอนจบ", list(s.consequences)) : null,
+    s.open?.length ? sec("คำถามที่เหลือไว้ภาคต่อ", list(s.open)) : null,
+    s.score ? sec("ผลตรวจ", dl(Object.entries(s.score)),
+      issues.length ? list(issues.map(i => `${i.level === "error" ? "ร้ายแรง" : "ควรดู"} · ${i.msg}`)) : el("p", {class: "note"}, "ไม่พบปัญหาตามกฎที่ใช้ตรวจ"),
+      el("details", {}, el("summary", {}, "กฎที่ใช้ตรวจ"), list(Object.values(s.rules || RULES))),
+      el("p", {class: "note"}, "ตัวเลขเหล่านี้นับจากกฎ ไม่ได้วัดคุณภาพงานเขียนจริง")) : null,
+    s.alts?.length ? sec("พล็อตอื่นที่สร้างพร้อมกัน", el("div", {class: "row"}, s.alts.map(a => {
+      const b = el("button", {class: "ghost sm"}, `seed ${a.seed} · ${a.twist?.name || "ไม่มีหักมุม"} · ${a.score["ปัญหา"]}`);
+      b.onclick = () => { lastStory = Object.assign(a, {alts: [s, ...s.alts.filter(x => x !== a)].map(x => Object.assign(x, {alts: []}))}); keepStory(); renderStory(lastStory); };
+      return b;
+    }))) : null,
     el("div", {class: "row"}, reroll, copy)].filter(Boolean));
 }
 
 for (const [tab, panel] of [["t-analyze", "p-analyze"], ["t-studio", "p-studio"]]) $(tab).onclick = () => {
   for (const [t, p] of [["t-analyze", "p-analyze"], ["t-studio", "p-studio"]]) { $(t).setAttribute("aria-selected", String(t === tab)); $(p).hidden = p !== panel; }
 };
-renderChar(); renderPlot();
+renderChar(); renderPlot(); if (lastStory) renderStory(lastStory);
 </script>
 </body>
 </html>
