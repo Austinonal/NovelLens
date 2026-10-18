@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ห้องแกะนิยาย</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chonburi&family=Anuphan:wght@400;500;600&family=Noto+Serif+Thai:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#F2F3F6; --sheet:#FFFFFF; --ink:#23264A; --muted:#62668A; --line:#D9DBE6;
+  --accent:#C2410C; --chip:#E8E9F2; --good:#15803D;
+  --wood-bg:#F4ECE2; --wood-sheet:#FFFBF6; --wood-line:#DDC9B3; --wood-accent:#8A5527; --wood-chip:#EDDDCB;
+  --display:"Chonburi","Noto Serif Thai",serif;
+  --body:"Anuphan","Sarabun",system-ui,sans-serif;
+  --read:"Noto Serif Thai","Sarabun",serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --paper:#15172A; --sheet:#1D2038; --ink:#E6E7F4; --muted:#A0A3C4; --line:#33375A; --accent:#FB923C; --chip:#2A2E4D; --good:#4ADE80; --wood-bg:#2A211A; --wood-sheet:#33281F; --wood-line:#4A3B2E; --wood-accent:#D9A066; --wood-chip:#3E3126; color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.7}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 16px 64px}
+header h1{font-family:var(--display);font-weight:400;font-size:clamp(28px,5vw,42px);line-height:1.3;margin:0}
+header p{margin:6px 0 0;color:var(--muted);max-width:62ch}
+.box{background:var(--sheet);border:1px solid var(--line);border-radius:6px;padding:14px 16px;min-width:0;margin-top:20px}
+.box h2{font-size:14px;margin:0 0 6px}
+.box p{margin:0 0 8px;font-size:14px;color:var(--muted)}
+.bm{display:inline-block;padding:8px 14px;border:1px dashed var(--accent);border-radius:6px;color:var(--accent);font-weight:600;text-decoration:none;cursor:grab}
+.grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:28px;margin-top:24px;align-items:start}
+@media (max-width:820px){.grid{grid-template-columns:minmax(0,1fr)}}
+.desk{position:sticky;top:12px;display:flex;flex-direction:column;gap:10px;min-width:0}
+@media (max-width:820px){.desk{position:static}}
+label{font-size:13px;letter-spacing:.04em;color:var(--muted);font-weight:600}
+textarea{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:6px;background:var(--sheet);color:var(--ink);min-height:300px;resize:vertical;font-family:var(--read);font-size:16px;line-height:1.85}
+textarea:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+button{font-family:var(--body);font-size:15px;font-weight:600;padding:10px 18px;border-radius:6px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer}
+button.ghost{background:transparent;color:var(--ink)}
+.count{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.status{font-size:14px;color:var(--accent);min-height:1.2em}
+.report{display:flex;flex-direction:column;gap:22px;min-width:0}
+.tag{display:inline-block;font-size:12px;letter-spacing:.06em;padding:2px 10px;border-radius:99px;background:var(--chip);color:var(--muted)}
+.genre{font-family:var(--display);font-size:clamp(22px,3.4vw,30px);line-height:1.35;margin:8px 0 4px}
+section h2{font-size:13px;letter-spacing:.08em;color:var(--accent);margin:0 0 8px;font-weight:600;border-bottom:1px solid var(--line);padding-bottom:6px}
+section p{margin:0 0 8px;max-width:65ch}
+.note{font-size:13px;color:var(--muted)}
+ul{margin:0;padding-left:1.2em}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips span{background:var(--chip);padding:3px 12px;border-radius:99px;font-size:14px}
+.bars{display:grid;grid-template-columns:max-content minmax(0,1fr) 3ch;gap:6px 12px;align-items:center;font-size:14px}
+.bar{height:8px;background:var(--chip);border-radius:4px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+.bars .n{color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+.pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+@media (max-width:560px){.pair{grid-template-columns:minmax(0,1fr)}}
+.dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 14px;margin:0 0 8px}
+.dl dt{color:var(--muted);font-size:14px}.dl dd{margin:0;font-variant-numeric:tabular-nums}
+.guide{background:var(--sheet);border:1px solid var(--line);border-radius:6px;padding:16px 18px}
+.guide h3{font-size:15px;margin:12px 0 4px}.guide h3:first-of-type{margin-top:0}
+.coach textarea{min-height:160px}
+.score{font-family:var(--display);font-size:34px;line-height:1.2}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600}
+td.ok{color:var(--good)}
+.chars{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.char{background:var(--sheet);border:1px solid var(--line);border-radius:6px;padding:12px 14px;min-width:0}
+.char b{font-family:var(--display);font-weight:400;font-size:18px}
+.char .role{font-size:13px;color:var(--muted);display:block;margin-bottom:6px}
+.summary{font-family:var(--read);margin:0;padding-left:1.2em}
+.arc{display:flex;gap:6px;align-items:flex-end;height:120px}
+.arc div{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px;height:100%;min-width:0;font-size:12px;color:var(--muted);text-align:center}
+.arc i{display:block;width:100%;background:var(--accent);border-radius:3px 3px 0 0;min-height:2px}
+.tabs{display:flex;gap:4px;margin-top:20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.tabs button{background:transparent;color:var(--muted);border:0;border-bottom:3px solid transparent;border-radius:0;padding:10px 14px}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.studio{--sheet:var(--wood-sheet);--line:var(--wood-line);--accent:var(--wood-accent);--chip:var(--wood-chip);background:var(--wood-bg);border:1px solid var(--line);border-radius:8px;padding:20px clamp(14px,3vw,28px);margin-top:20px;display:flex;flex-direction:column;gap:24px}
+.studio button:not(.ghost){background:var(--wood-accent);border-color:var(--wood-accent);color:var(--wood-sheet)}
+.studio button.ghost{border-color:var(--wood-line)}
+.stitle{font-family:var(--display);font-weight:400;font-size:22px;margin:0 0 10px}
+.sgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px}
+@media (max-width:820px){.sgrid{grid-template-columns:minmax(0,1fr)}}
+.scol{display:flex;flex-direction:column;gap:10px;min-width:0}
+.form{display:grid;gap:10px;padding:6px 0}
+.field{display:grid;gap:4px}
+.field .in{display:flex;gap:6px}
+.field input,.field select{flex:1;min-width:0;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:var(--sheet);color:var(--ink);font:inherit;font-size:15px}
+.field textarea{min-height:90px}
+button.sm{padding:6px 10px;font-size:13px}
+button[aria-pressed="true"].ghost{background:var(--accent);color:var(--sheet);border-color:var(--accent)}
+details{border-top:1px solid var(--line);padding:6px 0}
+summary{cursor:pointer;font-weight:600;padding:4px 0}
+.toggle{display:flex;flex-wrap:wrap;gap:6px}
+.toggle button{padding:4px 12px;font-size:14px;border-radius:99px;background:var(--chip);color:var(--ink);border:1px solid transparent}
+.studio .toggle button[aria-pressed="true"]{background:var(--accent);color:var(--sheet)}
+.studio .toggle button:not([aria-pressed="true"]){background:var(--chip);color:var(--ink);border-color:transparent}
+#story{display:flex;flex-direction:column;gap:22px}
+#story:empty{display:none}
+.logline{font-family:var(--read);font-size:18px;margin:8px 0 0;max-width:70ch}
+.beats{list-style:none;padding:0;margin:0;display:grid;gap:10px}
+.beat{display:grid;grid-template-columns:10em minmax(0,1fr);gap:12px;background:var(--sheet);border:1px solid var(--line);border-radius:6px;padding:10px 14px}
+.beat div{display:flex;flex-direction:column}
+.beat p{margin:0;font-family:var(--read)}
+@media (max-width:560px){.beat{grid-template-columns:minmax(0,1fr)}}
+.copyout{min-height:120px;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>ห้องแกะนิยาย</h1>
+    <p>ดึงตอนนิยายที่คุณเปิดอ่านอยู่ แล้วแกะฟีล โทน เนื้อเรื่องย่อ ตัวละคร และสไตล์การเขียน ด้วยการนับคำและวัดข้อความในเบราว์เซอร์ ไม่ใช้ AI และไม่ส่งข้อความออกไปไหน</p>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="t-analyze" aria-selected="true">แกะนิยาย</button>
+    <button role="tab" id="t-studio" aria-selected="false">สร้างตัวละครและพล็อต</button>
+  </nav>
+
+  <div id="p-analyze">
+  <div class="box">
+    <h2>ปุ่มดึงนิยาย</h2>
+    <p>ลากปุ่มนี้ไปไว้ที่แถบบุ๊กมาร์ก เปิดตอนนิยายที่อ่านได้ (ถ้ามีโหมด html ให้เลือกโหมดนั้น) แล้วกดปุ่ม ข้อความจะถูกส่งมาที่หน้านี้ ถ้าดึงผิดส่วน ให้ลากคลุมเนื้อเรื่องก่อนกด</p>
+    <a class="bm" id="bm" href="#">ดึงเข้าห้องแกะนิยาย</a>
+  </div>
+
+  <div class="grid">
+    <div class="desk">
+      <label for="src">ต้นฉบับที่จะวิเคราะห์</label>
+      <textarea id="src" placeholder="กดปุ่มดึงนิยายจากหน้าตอน หรือวางข้อความเองที่นี่"></textarea>
+      <div class="row">
+        <button id="go">วิเคราะห์</button>
+        <button id="clear" class="ghost">ล้างข้อความ</button>
+        <span class="count" id="count"></span>
+      </div>
+      <div class="status" id="status" role="status"></div>
+    </div>
+    <div class="report" id="report"></div>
+  </div>
+  </div>
+
+  <div id="p-studio" class="studio" hidden>
+    <div class="sgrid">
+      <div class="scol">
+        <h2 class="stitle">ตัวละคร</h2>
+        <p class="note">กรอกละเอียดแค่ไหนก็ได้ ช่องที่เว้นว่างระบบจะสุ่มให้ตอนสร้างพล็อต</p>
+        <div class="row" id="charTabs"></div>
+        <div class="row"><button id="rollChar" class="ghost sm">สุ่มทั้งตัว</button><button id="delChar" class="ghost sm">ลบตัวนี้</button></div>
+        <div id="charForm"></div>
+      </div>
+      <div class="scol">
+        <h2 class="stitle">พล็อต</h2>
+        <div id="plotForm" class="form"></div>
+        <div class="row"><button id="gen">สร้างพล็อต</button><button id="useRef" class="ghost">ใช้แนวจากผลวิเคราะห์</button></div>
+        <div class="status" id="sstatus" role="status"></div>
+      </div>
+    </div>
+    <div id="story"></div>
+  </div>
+</div>
+
+<script>
+// ===== Analysis engine: counting and measuring only, no AI =====
+// shortcut: keyword lists match substrings, so a few words inside longer words also count; grow the lists if a genre reads wrong.
+const FEELS = {
+  "รัก/ละมุน": "รัก หัวใจ ใจเต้น อบอุ่น จูบ กอด ยิ้ม คิดถึง หวาน อ่อนโยน แก้มแดง หน้าแดง เขิน สบตา จับมือ ห่วงใย ที่รัก แฟน ชอบเธอ ชอบเขา หวั่นไหว ละมุน",
+  "เศร้า": "เศร้า น้ำตา ร้องไห้ เสียใจ เจ็บปวด สูญเสีย จากไป งานศพ ผิดหวัง สะอื้น ทรมาน ลาก่อน แตกสลาย โศก อาลัย ใจสลาย ปวดร้าว",
+  "เหงา/สงบ": "เงียบ เหงา คนเดียว ว่างเปล่า สายฝน ฝนตก สลัว ลมหนาว แผ่วเบา อ้างว้าง เดียวดาย สงบ นิ่ง ช้าๆ เลือนราง",
+  "ลึกลับ": "ความลับ ปริศนา สงสัย แปลก ลึกลับ ซ่อน เบาะแส หายไป ร่องรอย ไม่มีใครรู้ ผิดปกติ ใครกัน ทำไมถึง คดี ฆาตกร ปิดบัง",
+  "น่ากลัว": "กลัว ผี เลือด กรีดร้อง มืดมิด หลอน สยอง ขนลุก ศพ เงาดำ ตัวสั่น วิญญาณ ปีศาจ คำสาป อาถรรพ์ หวาดผวา",
+  "แอ็กชัน/แฟนตาซี": "ต่อสู้ ระเบิด ยิง ดาบ พุ่ง โจมตี ไล่ล่า กระแทก เวทมนตร์ พลัง ศัตรู สงคราม อาวุธ มังกร อาณาจักร ฟันฝ่า ปะทะ หลบหลีก",
+  "ตลก": "หัวเราะ ฮา ขำ ตลก แซว 555 ฮ่าๆ กวนประสาท บ้าบอ เอ๋อ ขำขัน มุก ปั่นหัว ฮาก๊าก"
+};
+const GENRE = {"รัก/ละมุน":"โรแมนซ์","เศร้า":"ดราม่า","เหงา/สงบ":"ดราม่าชีวิต","ลึกลับ":"ลึกลับ/สืบสวน","น่ากลัว":"สยองขวัญ","แอ็กชัน/แฟนตาซี":"แอ็กชัน/แฟนตาซี","ตลก":"คอมเมดี้"};
+const TIPS = {
+  "รัก/ละมุน":{p:"ให้ความรู้สึกโตขึ้นทีละนิดผ่านการกระทำเล็กๆ (สบตา ยื่นของ) มากกว่าการสารภาพตรงๆ",c:"ให้คู่หลักมีจุดที่ขัดกันชัดๆ หนึ่งเรื่อง ความสัมพันธ์จะมีแรงดึง",a:"อย่าให้ตัวละครพูดว่ารักเร็วเกินไป"},
+  "เศร้า":{p:"ปล่อยให้สิ่งของหรือฉากแทนความเศร้า ไม่ต้องบอกว่าเศร้า",c:"ให้ตัวละครมีสิ่งที่เสียไปชัดเจน และสิ่งที่ยังยึดไว้",a:"อย่าบรรยายการร้องไห้ยาวหลายย่อหน้า"},
+  "เหงา/สงบ":{p:"ใช้บรรยากาศ (เสียง แสง อากาศ) เป็นตัวคุมอารมณ์",c:"ตัวเอกแนวนี้มักพูดน้อย ให้ความคิดในใจทำงานแทน",a:"อย่าเร่งเหตุการณ์จนเสียความนิ่ง"},
+  "ลึกลับ":{p:"วางรายละเอียดผิดปกติเล็กๆ ทุกฉาก และเปิดเผยทีละชิ้น",c:"ให้มีตัวละครที่รู้มากกว่าที่พูด",a:"อย่าเฉลยปมในตอนเดียวกับที่เปิดปม"},
+  "น่ากลัว":{p:"ความกลัวมาจากสิ่งที่ยังมองไม่เห็น ให้เสียงหรือเงานำก่อนภาพ",c:"ตัวละครต้องมีเหตุผลที่ยังไม่หนี",a:"อย่าโชว์ตัวร้ายเต็มตัวเร็วเกินไป"},
+  "แอ็กชัน/แฟนตาซี":{p:"ฉากต่อสู้ใช้ประโยคสั้น กริยาชัด ตัดรายละเอียดที่ไม่จำเป็น",c:"ให้ความสามารถของตัวละครมีราคาที่ต้องจ่าย",a:"อย่าอธิบายระบบพลังยาวกลางฉากบู๊"},
+  "ตลก":{p:"มุกที่ดีมาจากนิสัยตัวละคร ไม่ใช่แค่คำพูด",c:"จับคู่ตัวละครนิสัยตรงข้ามให้ปะทะกัน",a:"อย่าอธิบายมุกซ้ำหลังเล่าจบ"}
+};
+const TRAITS = {
+  "เงียบ เก็บตัว": "เงียบ นิ่ง ไม่พูด ไม่หัน เฉย ไม่ตอบ",
+  "อบอุ่น ใจดี": "ยิ้ม ใจดี อ่อนโยน ห่วง ช่วย ปลอบ ลูบหัว",
+  "ใจร้อน": "โกรธ ตะโกน ตวาด ใจร้อน กำหมัด หงุดหงิด ฉุน",
+  "ขี้อาย": "เขิน อาย หน้าแดง ก้มหน้า หลบตา",
+  "มั่นใจ เด็ดขาด": "มั่นใจ เด็ดขาด สั่ง แน่วแน่ ยืนยัน",
+  "ช่างสังเกต": "สังเกต มอง จ้อง คิด พินิจ",
+  "มีความลับ": "ความลับ ซ่อน ปิดบัง ไม่ยอมบอก เลี่ยง",
+  "เศร้า มีบาดแผล": "เศร้า ร้องไห้ น้ำตา เจ็บ เสียใจ",
+  "ขี้เล่น": "หัวเราะ แซว ขำ กวน หยอก"
+};
+const SAY = "พูด บอก ถาม ตอบ ตะโกน กระซิบ ยิ้ม หัวเราะ พึมพำ เอ่ย ตวาด หันไป ไม่หัน เดิน มอง ก้ม พยักหน้า ส่ายหน้า ยืน นั่ง".split(" ");
+const SENSES = "แสง เสียง กลิ่น ลม ฝน สี เย็น ร้อน มืด สว่าง ไฟ เงา หอม รสชาติ สัมผัส ฟ้า แดด หนาว".split(" ");
+const FIRST = "ผม ฉัน ข้า กู หนู ดิฉัน".split(" "), THIRD = "เขา เธอ หล่อน".split(" ");
+const POLITE = "ครับ ค่ะ คะ จ้ะ ขอรับ เจ้าค่ะ".split(" "), ROUGH = "กู มึง เว้ย วะ โว้ย ไอ้".split(" "), LITERARY = "ข้าพเจ้า อนึ่ง ทว่า มิได้ ประหนึ่ง ดุจ ราวกับ หาก มิ".split(" ");
+const STOP = new Set(("ที่ และ ก็ ไม่ ได้ ให้ ว่า มี เป็น ใน จะ ของ คือ แต่ กับ ไป มา อยู่ แล้ว นั้น นี้ ยัง จาก เมื่อ อย่าง เพราะ ถ้า หรือ ทั้ง ก่อน หลัง ขึ้น ลง ออก เข้า ตัว คน ทำ อะไร ไหน ครับ ค่ะ คะ นะ จ้ะ เลย ด้วย กัน ซึ่ง เพื่อ โดย กว่า เอง แค่ ทุก บาง อีก ตอน ตาม ผม ฉัน เขา เธอ มัน เรา คุณ พูด บอก ถาม รู้ เห็น มอง แล้วก็ เหมือน ต้อง อาจ ความ การ จึง ไว้ หนึ่ง สอง ครั้ง วัน เวลา").split(" "));
+const QUOTE = /["“”][^"“”]*["“”]|‘[^’\n]*’/g;
+
+const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// skip a match right after a negation, so "ไม่เศร้า" does not count as sad
+const count = (text, w) => (text.match(new RegExp("(?<!ไม่|ไม่ได้|ไม่ค่อย|ไร้)" + esc(w), "g")) || []).length;
+const sum = a => a.reduce((x, y) => x + y, 0);
+const countAll = (text, words) => sum(words.map(w => count(text, w)));
+const feelScores = text => {
+  const chars = text.replace(/\s/g, "").length || 1, out = {};
+  for (const [k, words] of Object.entries(FEELS)) out[k] = countAll(text, words.split(" ")) * 1000 / chars;
+  return out;
+};
+
+// Thai has no full stop: split paragraphs at spaces, then join pieces until each reads like a sentence (~40+ chars).
+function sentences(text){
+  const out = [];
+  for (const p of text.split(/\n+/)) {
+    let cur = "";
+    for (const piece of p.trim().split(/\s+/)) {
+      cur = cur ? cur + " " + piece : piece;
+      if (cur.length >= 40 || /[.!?…”"’]$/.test(cur)) { out.push(cur); cur = ""; }
+    }
+    if (cur.trim()) cur.length < 15 && out.length ? out[out.length - 1] += " " + cur : out.push(cur);
+  }
+  return out.filter(s => s.length >= 8);
+}
+
+// Thai names are split by the segmenter (พิมพ์|ดาว), so word pairs that always appear together are merged back.
+function topWords(text, min = 3, limit = 8){
+  if (!globalThis.Intl?.Segmenter) return [];
+  const t = [...new Intl.Segmenter("th", {granularity:"word"}).segment(text.replace(QUOTE, m => " " + m + " "))].filter(s => s.isWordLike).map(s => s.segment);
+  const uni = new Map(), bi = new Map(), add = (m, k) => m.set(k, (m.get(k) || 0) + 1);
+  t.forEach((w, i) => { add(uni, w); if (i) add(bi, t[i - 1] + "\u0000" + w); });
+  const out = [], used = new Set();
+  for (const [k, n] of [...bi].sort((a, b) => b[1] - a[1])) {
+    const [a, b] = k.split("\u0000");
+    if (n < min || STOP.has(a) || STOP.has(b) || used.has(a) || used.has(b) || n < 0.8 * Math.min(uni.get(a), uni.get(b))) continue;
+    out.push([a + b, n]); used.add(a); used.add(b);
+  }
+  for (const [w, n] of uni) if (n >= min && w.length >= 2 && !STOP.has(w) && !used.has(w) && !/^\d+$/.test(w)) out.push([w, n]);
+  return out.sort((a, b) => b[1] - a[1]).slice(0, limit);
+}
+
+// Extractive summary: the sentences that carry the most of the chapter's key words, kept in story order.
+function summarize(sents, keywords, n = 3){
+  return sents.map((s, i) => ({s, i, score: sum(keywords.map(([k, c]) => s.includes(k) ? c : 0)) / Math.sqrt(s.length) + (i === 0 || i === sents.length - 1 ? 0.3 : 0)}))
+    .sort((a, b) => b.score - a.score).slice(0, n).sort((a, b) => a.i - b.i).map(x => x.s);
+}
+
+// A recurring word counts as a character when it acts (name + verb) or sits in a paragraph with dialogue.
+function characters(text, cands){
+  const paras = text.split(/\n+/);
+  const verbs = new RegExp("^.{0,12}?(" + SAY.map(esc).join("|") + ")");
+  return cands.map(([name, mentions]) => {
+    const acts = text.split(name).slice(1).filter(after => verbs.test(after)).length;
+    const lines = paras.filter(p => p.replace(QUOTE, " ").includes(name) && (p.match(QUOTE) || []).length).length;
+    const near = sentences(text).filter(s => s.includes(name)).join(" ");
+    const traits = Object.entries(TRAITS).map(([k, w]) => [k, countAll(near, w.split(" "))]).filter(x => x[1]).sort((a, b) => b[1] - a[1]).slice(0, 3).map(x => x[0]);
+    const feel = Object.entries(feelScores(near)).sort((a, b) => b[1] - a[1])[0];
+    return {name, mentions, acts, lines, traits, mood: feel?.[1] ? feel[0] : ""};
+  }).filter(c => c.acts >= 2 || (c.acts >= 1 && c.lines >= 1))
+    .map((c, i) => ({...c, role: i === 0 ? "ตัวเอก (ถูกพูดถึงมากที่สุด)" : "ตัวละครรอง"}));
+}
+
+// Emotion arc: the same feel scores, measured slice by slice through the chapter.
+function arc(text, parts = 6){
+  const size = Math.ceil(text.length / parts);
+  return Array.from({length: parts}, (_, i) => {
+    const f = feelScores(text.slice(i * size, (i + 1) * size));
+    const top = Object.entries(f).sort((a, b) => b[1] - a[1])[0];
+    return {total: sum(Object.values(f)), top: top[1] ? top[0] : "เรียบ"};
+  });
+}
+
+function analyze(raw){
+  const text = raw.replace(/\r/g, "").trim();
+  const chars = text.replace(/\s/g, "").length || 1;
+  const paras = text.split(/\n+/).map(s => s.trim()).filter(Boolean);
+  const quotes = text.match(QUOTE) || [];
+  const narration = text.replace(QUOTE, " "), speech = quotes.join(" ");
+  const clauses = text.split(/[\s.!?…]+/).filter(Boolean);
+  const per1k = n => n * 1000 / chars;
+  const first = countAll(narration, FIRST), third = countAll(narration, THIRD);
+  const polite = countAll(speech, POLITE), rough = countAll(speech, ROUGH), literary = per1k(countAll(narration, LITERARY));
+  const words = topWords(text), sents = sentences(text), curve = arc(text);
+  const peak = curve.reduce((m, x, i) => x.total > curve[m].total ? i : m, 0);
+
+  return {
+    chars,
+    paraCount: paras.length,
+    dialogue: sum(quotes.map(q => q.replace(/\s/g, "").length)) / chars,
+    clause: chars / (clauses.length || 1),
+    para: chars / (paras.length || 1),
+    senses: per1k(countAll(text, SENSES)),
+    exclaim: per1k(count(text, "!")), question: per1k(count(text, "?")), ellipsis: per1k(count(text, "...") + count(text, "…")),
+    pov: first > third * 0.6 && first > 0 ? "บุคคลที่หนึ่ง (ผม/ฉัน เล่าเอง)" : "บุคคลที่สาม (เล่าจากข้างนอก)",
+    lang: literary > 2 ? "สละสลวยแบบวรรณกรรม" : rough > polite ? "ภาษาพูดกันเอง ห้วนๆ" : polite > 2 ? "สุภาพ มีหางเสียง" : "เรียบง่าย ภาษาปัจจุบัน",
+    feel: feelScores(text),
+    opens: /^["“‘]/.test(paras[0] || "") ? "บทพูด" : "บรรยาย",
+    ends: /[?…]|\.\.\.|['’]$/.test((paras.at(-1) || "").slice(-3)) ? "ทิ้งคำถาม/ค้างไว้" : /["”]$/.test(paras.at(-1) || "") ? "บทพูด" : "บรรยาย",
+    words,
+    summary: summarize(sents, topWords(text, 2, 30)),
+    cast: characters(text, words),
+    curve,
+    peak: ["ช่วงต้น", "ช่วงต้น", "ช่วงกลาง", "ช่วงกลาง", "ช่วงท้าย", "ช่วงท้าย"][peak]
+  };
+}
+
+const topFeels = a => Object.entries(a.feel).filter(([, v]) => v > 0).sort((x, y) => y[1] - x[1]);
+const pace = a => a.clause < 25 && a.dialogue > 0.3 ? "เร็ว" : a.para > 250 || a.clause > 45 ? "ช้า ละเอียด" : "กลางๆ";
+
+function guide(a){
+  const f = topFeels(a).slice(0, 2).map(([k]) => TIPS[k]);
+  const p = f.map(t => t.p), c = f.map(t => t.c), avoid = f.map(t => t.a);
+  p.push(a.dialogue > 0.3 ? "ให้บทสนทนาเดินเรื่อง ใส่บทพูดราว " + pct(a.dialogue) + " ของเนื้อหา" : "เล่าด้วยการบรรยายเป็นหลัก บทพูดใช้เท่าที่จำเป็น (ราว " + pct(a.dialogue) + ")");
+  p.push("ทำวลีให้ยาวราว " + Math.round(a.clause) + " ตัวอักษร และย่อหน้าราว " + Math.round(a.para) + " ตัวอักษร ใช้ภาษา" + a.lang);
+  if (a.senses > 8) p.push("บรรยายผัสสะ (แสง เสียง กลิ่น อากาศ) ให้เห็นภาพเยอะ");
+  p.push("วางจุดอารมณ์สูงสุดไว้" + a.peak + "ของตอน" + (a.ends === "ทิ้งคำถาม/ค้างไว้" ? " แล้วจบแบบค้างไว้ให้คนอยากอ่านต่อ" : ""));
+  c.push("เล่าด้วยมุมมอง" + a.pov);
+  const lead = a.cast[0];
+  if (lead?.traits.length) c.push("ตัวเอกต้นแบบแสดงนิสัย " + lead.traits.join(", ") + " ผ่านการกระทำ ไม่ได้บอกตรงๆ");
+  if (a.cast.length) c.push("ตอนนี้มีตัวละครที่มีบทบาท " + a.cast.length + " ตัว โฟกัสให้น้อยแต่ชัด");
+  if (a.exclaim > 3) avoid.push("ระวังใช้ ! เยอะจนอารมณ์ล้น ต้นฉบับใช้พอดีๆ");
+  return {p, c, avoid};
+}
+
+function compare(ref, mine){
+  const near = (x, y) => (x === 0 && y === 0) ? 1 : 1 - Math.abs(x - y) / Math.max(x, y);
+  const cos = (a, b) => { const k = Object.keys(a), va = k.map(x => a[x]), vb = k.map(x => b[x]), na = Math.hypot(...va), nb = Math.hypot(...vb); return na && nb ? sum(va.map((x, i) => x * vb[i])) / (na * nb) : (na || nb ? 0 : 1); };
+  const curve = c => Object.fromEntries(c.map((x, i) => [i, x.total]));
+  const rows = [
+    {name:"ฟีลของเรื่อง", ref:topFeels(ref).slice(0,2).map(x=>x[0]).join(", ") || "-", mine:topFeels(mine).slice(0,2).map(x=>x[0]).join(", ") || "-", s:cos(ref.feel, mine.feel),
+      tip:"ใช้คำที่สื่ออารมณ์แบบ " + (topFeels(ref)[0]?.[0] || "ต้นฉบับ") + " มากขึ้น หรือใส่ฉากที่ทำให้เกิดอารมณ์นั้น"},
+    {name:"จังหวะอารมณ์", ref:"พีค" + ref.peak, mine:"พีค" + mine.peak, s:cos(curve(ref.curve), curve(mine.curve)),
+      tip:"ย้ายฉากที่อารมณ์แรงที่สุดไปไว้" + ref.peak + "ของตอน"},
+    {name:"สัดส่วนบทพูด", ref:pct(ref.dialogue), mine:pct(mine.dialogue), s:near(ref.dialogue, mine.dialogue),
+      tip: mine.dialogue < ref.dialogue ? "เพิ่มบทสนทนา ให้ตัวละครพูดเปิดข้อมูลแทนการบรรยาย" : "ลดบทพูด เปลี่ยนบางส่วนเป็นการบรรยายหรือการกระทำ"},
+    {name:"ความยาววลี", ref:Math.round(ref.clause) + " ตัว", mine:Math.round(mine.clause) + " ตัว", s:near(ref.clause, mine.clause),
+      tip: mine.clause > ref.clause ? "ตัดประโยคให้สั้นลง เว้นวรรคบ่อยขึ้น" : "ขยายประโยคให้ยาวขึ้น ใส่รายละเอียดในประโยคเดียว"},
+    {name:"ความยาวย่อหน้า", ref:Math.round(ref.para) + " ตัว", mine:Math.round(mine.para) + " ตัว", s:near(ref.para, mine.para),
+      tip: mine.para > ref.para ? "แบ่งย่อหน้าให้ถี่ขึ้น" : "รวมย่อหน้าให้ยาวขึ้น"},
+    {name:"การบรรยายผัสสะ", ref:ref.senses.toFixed(1), mine:mine.senses.toFixed(1), s:near(ref.senses, mine.senses),
+      tip: mine.senses < ref.senses ? "เพิ่มแสง เสียง กลิ่น อากาศ ให้ฉากมีภาพ" : "ลดการบรรยายฉาก ให้เรื่องเดินเร็วขึ้น"},
+    {name:"มุมมองการเล่า", ref:ref.pov, mine:mine.pov, s: ref.pov === mine.pov ? 1 : 0, tip:"เปลี่ยนเป็น" + ref.pov},
+    {name:"ระดับภาษา", ref:ref.lang, mine:mine.lang, s: ref.lang === mine.lang ? 1 : 0, tip:"ปรับภาษาให้" + ref.lang}
+  ];
+  return {score: Math.round(sum(rows.map(r => r.s)) / rows.length * 100), rows};
+}
+const pct = x => Math.round(x * 100) + "%";
+
+// ===== UI =====
+const SAMPLE_TEXT = `ฝนตกตั้งแต่บ่ายสาม และพิมพ์ดาวก็ยังไม่กลับบ้าน
+
+ร้านหนังสือเก่าตรงหัวมุมซอยปิดไฟไปครึ่งร้าน เหลือแค่โคมเหลืองดวงเดียวเหนือเคาน์เตอร์ พิมพ์ดาวยืนอยู่ตรงนั้น มือลูบปกหนังสือที่ไม่มีชื่อผู้แต่ง
+
+"คุณมาทุกวันพุธ" เสียงทุ้มดังขึ้นจากหลังชั้นหนังสือ "แต่วันนี้วันพฤหัส"
+
+พิมพ์ดาวไม่หันไปมอง "ก็เพราะเมื่อวานคุณไม่เปิดร้าน"
+
+ความเงียบตามมานานพอให้เสียงฝนดังขึ้นอีกระดับ ชายเจ้าของร้านเดินออกมา ถือร่มสีดำที่เปียกอยู่แล้วทั้งที่เขาไม่ได้ออกไปไหน
+
+"เมื่อวานผมไปงานศพ" เขาพูด "ของคนที่เขียนเล่มที่คุณถืออยู่"
+
+พิมพ์ดาวก้มมองหนังสือในมือ หน้าแรกมีลายมือเขียนไว้ว่า ‘ถึงคนที่จะมาวันพฤหัส’ ใครกันที่รู้ว่าเธอจะมา...`;
+
+const $ = id => document.getElementById(id);
+const src = $("src"), report = $("report"), status = $("status");
+let ref = null, isExample = true;
+
+function el(tag, attrs = {}, ...kids){
+  const n = document.createElement(tag);
+  for (const [k,v] of Object.entries(attrs)) k === "class" ? n.className = v : n.setAttribute(k, v);
+  for (const k of kids.flat()) if (k != null && k !== "") n.append(k);
+  return n;
+}
+const list = arr => el("ul", {}, arr.map(x => el("li", {}, x)));
+const sec = (title, ...kids) => el("section", {}, el("h2", {}, title), ...kids);
+const dl = pairs => el("dl", {class:"dl"}, pairs.flatMap(([k, v]) => [el("dt", {}, k), el("dd", {}, v)]));
+
+function render(a){
+  const feels = topFeels(a), g = guide(a), max = feels[0]?.[1] || 1, arcMax = Math.max(...a.curve.map(x => x.total)) || 1;
+  report.replaceChildren(
+    el("div", {},
+      el("span", {class:"tag"}, isExample ? "ตัวอย่าง: ผลวิเคราะห์ของข้อความตัวอย่าง" : "ผลวิเคราะห์"),
+      el("div", {class:"genre"}, feels.length ? feels.slice(0, 2).map(([k]) => GENRE[k]).join(" + ") : "ยังจับแนวไม่ได้"),
+      el("p", {class:"note"}, "ประเมินจากคำที่ใช้ " + a.chars.toLocaleString() + " ตัวอักษร " + a.paraCount + " ย่อหน้า" + (a.chars < 800 ? " · ข้อความสั้น ผลอาจคลาดเคลื่อน" : ""))),
+    sec("เนื้อเรื่องโดยย่อ (ประโยคสำคัญจากต้นฉบับ)", a.summary.length ? el("ol", {class:"summary"}, a.summary.map(s => el("li", {}, s))) : el("p", {class:"note"}, "ข้อความสั้นเกินไป")),
+    sec("ฟีลของเรื่อง", feels.length
+      ? el("div", {class:"bars"}, feels.flatMap(([k, v]) => [el("span", {}, k), el("div", {class:"bar"}, el("i", {style:"width:" + Math.round(v / max * 100) + "%"})), el("span", {class:"n"}, v.toFixed(1))]))
+      : el("p", {}, "ไม่พบคำที่บอกอารมณ์ชัดเจน"),
+      el("p", {class:"note"}, "ตัวเลข = จำนวนคำอารมณ์ต่อ 1,000 ตัวอักษร (ไม่นับคำที่มี ไม่ นำหน้า)")),
+    sec("อารมณ์ไล่ตามตอน",
+      el("div", {class:"arc", role:"img", "aria-label":"ความเข้มอารมณ์ 6 ช่วง จุดสูงสุดอยู่" + a.peak},
+        a.curve.map((x, i) => el("div", {}, el("i", {style:"height:" + Math.round(x.total / arcMax * 80) + "%"}), el("span", {}, (i + 1) + " " + x.top)))),
+      el("p", {class:"note"}, "แบ่งตอนเป็น 6 ช่วงเท่าๆ กัน ความสูง = ความเข้มของอารมณ์ จุดพีคอยู่" + a.peak)),
+    el("div", {class:"pair"},
+      sec("โทนและจังหวะ", dl([["อารมณ์หลัก", feels[0]?.[0] || "เรียบ"], ["จังหวะ", pace(a)], ["เปิดเรื่องด้วย", a.opens], ["จบตอนด้วย", a.ends]])),
+      sec("สไตล์การเขียน", dl([["มุมมอง", a.pov], ["ระดับภาษา", a.lang], ["บทพูด", pct(a.dialogue)], ["ความยาววลี", Math.round(a.clause) + " ตัวอักษร"], ["ย่อหน้า", Math.round(a.para) + " ตัวอักษร"], ["ผัสสะ", a.senses.toFixed(1) + " / 1,000"], ["! ? …", [a.exclaim, a.question, a.ellipsis].map(x => x.toFixed(1)).join(" · ")]]))),
+    sec("ตัวละคร", a.cast.length
+      ? el("div", {class:"chars"}, a.cast.map(c => el("div", {class:"char"},
+          el("b", {}, c.name), el("span", {class:"role"}, c.role),
+          dl([["ถูกพูดถึง", c.mentions + " ครั้ง"], ["ฉากที่มีบทพูด", c.lines + ""], ["อารมณ์รอบตัว", c.mood || "-"]]),
+          c.traits.length ? el("div", {class:"chips"}, c.traits.map(t => el("span", {}, t))) : el("p", {class:"note"}, "ยังจับนิสัยไม่ได้"))))
+      : el("p", {class:"note"}, "ยังหาชื่อตัวละครไม่เจอ ชื่อต้องปรากฏอย่างน้อย 3 ครั้งและมีการกระทำหรือบทพูด")),
+    sec("คำที่วนซ้ำ", a.words.length
+      ? el("div", {class:"chips"}, a.words.map(([w, n]) => el("span", {}, w + " ×" + n)))
+      : el("p", {class:"note"}, "ยังไม่มีคำไหนซ้ำถึง 3 ครั้ง")),
+    sec("ถ้าอยากแต่งแนวนี้", el("div", {class:"guide"},
+      el("h3", {}, "หลักการเขียน"), list(g.p),
+      el("h3", {}, "การสร้างตัวละคร"), list(g.c),
+      el("h3", {}, "สิ่งที่ควรเลี่ยง"), list(g.avoid))),
+    coach()
+  );
+}
+
+function coach(){
+  const box = el("textarea", {id:"draft", placeholder:"วางร่างที่คุณเขียน แล้วดูว่าใกล้กับต้นฉบับแค่ไหน"});
+  const btn = el("button", {}, "เทียบกับต้นฉบับ");
+  const out = el("div", {});
+  btn.onclick = () => {
+    if (box.value.trim().length < 50) { out.replaceChildren(el("p", {class:"note"}, "ใส่ร่างอย่างน้อยสักย่อหน้า ระบบถึงจะวัดได้")); return; }
+    const r = compare(ref, analyze(box.value));
+    out.replaceChildren(
+      el("p", {}, el("span", {class:"score"}, r.score + "%"), " ใกล้เคียงต้นฉบับ"),
+      el("div", {class:"tbl"}, el("table", {},
+        el("thead", {}, el("tr", {}, ["ด้าน", "ต้นฉบับ", "ของคุณ", "คำแนะนำ"].map(h => el("th", {}, h)))),
+        el("tbody", {}, r.rows.map(x => el("tr", {}, el("td", {}, x.name), el("td", {}, x.ref), el("td", {}, x.mine),
+          x.s >= 0.7 ? el("td", {class:"ok"}, "ใกล้แล้ว") : el("td", {}, x.tip)))))));
+  };
+  return sec("ลองแต่งแนวนี้", el("p", {}, "วางร่างของคุณ ระบบจะวัดด้วยเกณฑ์เดียวกับด้านบน แล้วบอกว่าด้านไหนใกล้หรือห่างจากต้นฉบับ"),
+    el("div", {class:"coach"}, el("label", {for:"draft"}, "ร่างของคุณ"), box), el("div", {class:"row", style:"margin-top:10px"}, btn), out);
+}
+
+function run(){
+  const text = src.value.trim();
+  if (!text) { status.textContent = "วางข้อความนิยายหรือกดปุ่มดึงนิยายก่อน"; return; }
+  ref = analyze(text); render(ref); status.textContent = "";
+}
+$("go").onclick = () => { isExample = false; run(); };
+$("clear").onclick = () => { src.value = ""; src.focus(); updateCount(); };
+const updateCount = () => $("count").textContent = src.value.length.toLocaleString() + " ตัวอักษร";
+src.addEventListener("input", updateCount);
+
+// --- Receive chapter text from the bookmarklet ---
+const BOOKMARKLET = app => `javascript:(()=>{const APP=${JSON.stringify(app)};let t=String(getSelection()).trim();if(t.length<200){const m=new Map();document.querySelectorAll('p').forEach(p=>{const k=p.parentElement;m.set(k,(m.get(k)||0)+p.innerText.trim().length)});let b=null,n=0;m.forEach((v,k)=>{if(v>n){n=v;b=k}});if(!b||n<=200){alert('ไม่พบเนื้อเรื่องเป็นข้อความบนหน้านี้ ถ้าเว็บมีโหมดอ่านแบบ html ให้สลับไปโหมดนั้น หรือลากคลุมเนื้อเรื่องแล้วกดใหม่');return}t=b.innerText.trim()}const w=window.open(APP,'_blank');const o=new URL(APP).origin;addEventListener('message',function f(e){if(e.source===w&&e.origin===o&&e.data==='novel-ready'){w.postMessage({type:'novel-text',text:t,title:document.title},o);removeEventListener('message',f)}})})()`;
+$("bm").href = BOOKMARKLET(location.href.split("#")[0]);
+$("bm").onclick = e => { e.preventDefault(); status.textContent = "ลากปุ่มนี้ไปไว้ที่แถบบุ๊กมาร์ก แล้วไปกดที่หน้าตอนนิยาย"; };
+addEventListener("message", e => {
+  if (e.source !== window.opener || e.data?.type !== "novel-text") return;
+  src.value = String(e.data.text || ""); updateCount();
+  status.textContent = "ดึงมาแล้ว: " + String(e.data.title || "").slice(0, 80);
+  isExample = false; run();
+});
+if (window.opener) window.opener.postMessage("novel-ready", "*");
+
+if (!window.opener) src.value = SAMPLE_TEXT;
+updateCount(); run();
+</script>
+<script>
+// ===== Studio engine: build characters and a plot from templates, no AI =====
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const POOL = {
+  name: "พิมพ์ดาว ภูผา ธาม ใบบัว ณดา ปรานต์ วายุ ลลิล ธีร์ เมฆา อัญญา คิริน ภาคิน ต้นกล้า ปิ่นมุก รวิ".split(" "),
+  nick: "ดาว ผา ธาม บัว ดา ปราณ ยุ ลิล ธีร์ เมฆ ญา คิว คิน กล้า ปิ่น รวิ".split(" "),
+  age: "16 17 19 21 24 27 30 35 42".split(" "),
+  job: "นักศึกษา ครูฝึกสอน หมอเวรดึก ตำรวจหน้าใหม่ นักเขียนที่ยังไม่ดัง บาริสต้า เจ้าของร้านหนังสือเก่า โปรแกรมเมอร์ นักดนตรีกลางคืน นักข่าวสายสืบสวน ช่างภาพ พ่อมดฝึกหัด องครักษ์ ทายาทบริษัท".split(" "),
+  build: "สูงโปร่ง ตัวเล็กบอบบาง ไหล่กว้างแข็งแรง ผอมสูง ท้วมนิดๆ ดูอบอุ่น".split(" "),
+  hair: ["ผมดำยาวตรง","ผมสั้นยุ่งเหมือนเพิ่งตื่น","ผมสีน้ำตาลหยักศก","ผมรวบหางม้าตลอด","ผมสีเงินผิดธรรมชาติ"],
+  eyes: ["ตาเรียวคม","ตาโตกลมดูใสซื่อ","ตาสีอ่อนผิดคนทั่วไป","ตาง่วงๆ แต่จับผิดเก่ง"],
+  mark: ["แผลเป็นที่คิ้วซ้าย","ไฝใต้ตา","ใส่แว่นกรอบหนา","รอยสักเล็กๆ ที่ข้อมือ","ยิ้มแล้วมีลักยิ้มข้างเดียว"],
+  style: ["เสื้อเชิ้ตหลวมสีพื้น","เสื้อฮู้ดตัวใหญ่","ชุดทำงานเรียบกริบ","เสื้อผ้าเก่าแต่สะอาด","ของแบรนด์เนมทั้งตัว"],
+  traits: "ใจดี เย็นชา ขี้เล่น ช่างสังเกต มั่นใจ ขี้อาย ใจร้อน รอบคอบ ดื้อ ซื่อสัตย์ เจ้าเล่ห์ มองโลกในแง่ดี พูดน้อย ฉลาด กล้าหาญ ขี้กังวล".split(" "),
+  flaw: ["ไม่ไว้ใจใคร","หยิ่งไม่ยอมขอโทษ","ขี้หึง","หนีปัญหา","โกหกเก่งเกินไป","ยึดติดอดีต","ใจอ่อนเกินไป","อยากชนะทุกเรื่อง"],
+  want: ["ตามหาพี่สาวที่หายไป","พิสูจน์ตัวเองให้พ่อยอมรับ","เปิดร้านของตัวเอง","ล้างแค้นให้ครอบครัว","หนีจากชีวิตเดิม","ปกป้องน้องชาย","รู้ความจริงเรื่องอดีตของตัวเอง","ได้เป็นที่หนึ่ง"],
+  fear: ["การถูกทิ้ง","ความล้มเหลว","ความมืด","การรักใครสักคน","การถูกมองว่าอ่อนแอ","การสูญเสียคนสำคัญอีกครั้ง"],
+  speech: ["พูดน้อยแต่ตรง","พูดติดตลกเวลาเครียด","ลงท้ายด้วย นะ ตลอด","สุภาพเกินเหตุ","ชอบตอบคำถามด้วยคำถาม"],
+  family: ["ลูกคนเดียวของแม่เลี้ยงเดี่ยว","พี่คนโตในบ้านที่มีน้องห้าคน","อยู่กับยายที่ต่างจังหวัด","ครอบครัวรวยแต่ห่างเหิน","กำพร้าโตในบ้านเด็ก"],
+  wound: ["พ่อแม่หย่ากันตอนเด็ก","ถูกเพื่อนสนิทหักหลัง","เสียพี่ชายในอุบัติเหตุ","เคยถูกกลั่นแกล้งจนต้องย้ายโรงเรียน","เติบโตมาในความจน"],
+  secret: ["เคยทำให้เพื่อนสนิทตาย","ไม่ใช่ลูกแท้ๆ ของพ่อแม่","แอบรักคนที่ไม่ควรรัก","มีพลังที่ควบคุมไม่ได้","เคยเป็นคนของฝ่ายศัตรู","ใช้ชื่อปลอมมาตลอด"],
+  skill: ["ทำอาหาร","ต่อสู้มือเปล่า","ความจำดีเยี่ยม","วาดรูป","แฮกระบบ","โกหกแนบเนียน","อ่านคนออก","เล่นดนตรี"],
+  item: ["นาฬิกาพกของพ่อ","สร้อยที่แม่ให้","สมุดบันทึกเก่า","กุญแจที่ไม่รู้ว่าเปิดอะไร","รูปถ่ายขาดครึ่ง","จดหมายที่ยังไม่ได้เปิด"]
+};
+const FIELDS = [
+  ["ตัวตน", [["name","ชื่อ"],["nick","ชื่อเล่น"],["age","อายุ"],["gender","เพศ",["หญิง","ชาย","ไม่ระบุ"]],["role","บทบาท",["ตัวเอก","คู่พระ/นาง","เพื่อนสนิท","ตัวร้าย","ผู้ชี้ทาง","ตัวละครรอง"]],["job","อาชีพ"]]],
+  ["รูปลักษณ์", [["build","รูปร่าง"],["hair","ทรงผม"],["eyes","ดวงตา"],["mark","จุดเด่น"],["style","การแต่งตัว"]]],
+  ["จิตใจ", [["traits","นิสัย (เลือกได้ 3)"],["flaw","ข้อเสีย"],["want","สิ่งที่อยากได้"],["fear","สิ่งที่กลัว"],["speech","วิธีพูด"]]],
+  ["ภูมิหลัง", [["family","ครอบครัว"],["wound","ปมในอดีต"],["secret","ความลับ"]]],
+  ["อื่นๆ", [["skill","ทักษะเด่น"],["item","ของสำคัญ"],["note","บันทึกเพิ่มเติม"]]]
+];
+const rollField = (c, k) => {
+  if (k === "traits") c.traits = [...POOL.traits].sort(() => Math.random() - .5).slice(0, 3);
+  else if (k === "gender" || k === "role") c[k] = pick(FIELDS.flatMap(g => g[1]).find(f => f[0] === k)[2]);
+  else if (POOL[k]) c[k] = pick(POOL[k]);
+};
+
+const STRUCTURES = {
+  three: ["สามองก์", [["เปิดเรื่อง","open"],["จุดเปลี่ยน","inciting"],["ตัดสินใจลงมือ","cross"],["อุปสรรคถาโถม","tests"],["จุดกึ่งกลาง","mid"],["ดิ่งสุด","low"],["ไคลแมกซ์","climax"],["คลี่คลาย","resolve"]]],
+  hero: ["การเดินทางของฮีโร่", [["โลกปกติ","open"],["เสียงเรียก","inciting"],["ปฏิเสธ","refuse"],["พบผู้ชี้ทาง","ally"],["ข้ามธรณี","cross"],["บททดสอบ","tests"],["ถ้ำที่ลึกที่สุด","mid"],["บททดสอบใหญ่","low"],["ไคลแมกซ์","climax"],["กลับบ้าน","resolve"]]],
+  kisho: ["คิโชเท็นเค็ตสึ (สี่จังหวะ)", [["คิ: แนะนำ","open"],["โช: พัฒนา","tests"],["เท็น: พลิก","mid"],["เค็ตสึ: ประสาน","resolve"]]]
+};
+const BEATS = {
+  open: ["{H}ใช้ชีวิตธรรมดาที่{place} แต่ยังติดค้างกับเรื่องที่{wound}","ทุกวันของ{H}ที่{place}เหมือนเดิม จนดูเหมือนลืมความตั้งใจที่จะ{want}ไปแล้ว"],
+  refuse: ["{H}ปฏิเสธ เพราะกลัว{fear}","{H}ลังเล เพราะนิสัย{flaw}ทำให้ไม่กล้าเสี่ยง"],
+  ally: ["{A}ยื่นมือเข้ามาช่วย และสอน{H}ว่าต้องเลิก{flaw}","{H}ได้พบ{A} ที่ดูเหมือนรู้เรื่อง{item}มากกว่าที่ควร"],
+  cross: ["{H}ตัดสินใจลงมือเพื่อ{want} ไม่มีทางย้อนกลับแล้ว","{H}ทิ้งชีวิตเดิมไว้ข้างหลัง ติดตัวไปแค่{item}"],
+  tests: ["{H}กับ{A}ต้องร่วมมือกันทั้งที่เข้ากันไม่ได้ ระหว่างนั้น{V}เริ่มขยับ","นิสัย{flaw}ของ{H}ทำให้แผนพังไปหนึ่งครั้ง และ{A}เริ่มไม่แน่ใจ"]
+};
+const ENDINGS = {
+  "สุขนิยม": ["{H}{want}ได้สำเร็จ และเรียนรู้ที่จะอยู่กับความกลัว{fear}","{H}กับ{A}เริ่มต้นใหม่ด้วยกัน โดยมี{item}เป็นเครื่องเตือนใจ"],
+  "โศกนาฏกรรม": ["{H}ชนะ แต่ต้องเสีย{A}ไป สิ่งที่ได้มาจึงไม่หวานอย่างที่คิด","{H}ทำสำเร็จ แต่ความลับที่ว่าตัวเอง{secret}ทำให้กลับไปเป็นคนเดิมไม่ได้อีก"],
+  "ปลายเปิด": ["ทุกอย่างดูจบลง จนกระทั่ง{item}ส่งสัญญาณบางอย่างอีกครั้ง","{H}ยืนอยู่ที่{place} ยังไม่แน่ใจว่าสิ่งที่เลือกถูกหรือผิด"],
+  "หักมุม": ["ความจริงถูกเปิดเผย คนที่วางแผนทั้งหมดตั้งแต่ต้นคือ{A}","ปรากฏว่าความลับที่ว่า{H}{secret} คือกุญแจของเรื่องทั้งหมด"]
+};
+const PLOTS = {
+  "รัก/ละมุน": {places:["ร้านกาแฟเล็กๆ ริมทะเล","มหาวิทยาลัยในเมืองใหญ่","ออฟฟิศที่แข่งขันกันดุเดือด"],
+    inciting:["{H}ต้องจำใจทำงานคู่กับ{A} คนที่เคยทำให้อับอายต่อหน้าคนอื่น","{H}ได้รับจดหมายรักที่ไม่ได้ส่งถึงตัวเอง แต่เป็นลายมือของ{A}","{H}ตกลงแต่งงานหลอกๆ กับ{A} เพื่อ{want}"],
+    mid:["{H}เผลอยอมรับกับตัวเองว่าหวั่นไหว ในคืนที่{A}เล่าเรื่องที่ไม่เคยบอกใคร","{V}โผล่มาพร้อมเรื่องในอดีตของ{A}"],
+    low:["ความลับที่ว่า{H}{secret}ถูกเปิดเผย และ{A}เดินจากไป","{H}เลือกเป้าหมายแทน{A} แล้วเสียใจทันที"],
+    climax:["{H}ยอมเผชิญสิ่งที่กลัวที่สุดคือ{fear} เพื่อบอกความจริงกับ{A}","{H}วิ่งไปหา{A}ก่อนทุกอย่างจะสายเกินไป"]},
+  "เศร้า": {places:["บ้านต่างจังหวัดที่กำลังจะถูกขาย","โรงพยาบาลเล็กๆ ประจำอำเภอ","เมืองท่าที่ซบเซา"],
+    inciting:["ข่าวการจากไปของคนสำคัญพา{H}กลับมาที่{place}","{H}พบ{item} พร้อมข้อความที่ทิ้งไว้ถึงตัวเอง"],
+    mid:["{H}กับ{A}ปะติดปะต่ออดีต และพบว่ามีคนโกหกมาตลอด","{H}ยอมเล่าเรื่องที่{wound}ให้{A}ฟังเป็นครั้งแรก"],
+    low:["{H}เสียสิ่งสุดท้ายที่ยึดไว้ และเกือบยอมแพ้","{V}บังคับให้{H}เลือกระหว่างอดีตกับอนาคต"],
+    climax:["{H}ยอมปล่อยมือจากอดีต เพื่อ{want}","{H}เผชิญหน้ากับความกลัว{fear}ที่ซ่อนไว้มาทั้งชีวิต"]},
+  "เหงา/สงบ": {places:["เมืองเล็กที่ฝนตกทั้งปี","หอพักเก่าชานเมือง","ร้านหนังสือมือสองท้ายซอย"],
+    inciting:["{A}ย้ายเข้ามาห้องข้างๆ และเปลี่ยนจังหวะชีวิตของ{H}","{H}เริ่มได้รับ{item}จากใครบางคนทุกสัปดาห์"],
+    mid:["{H}เริ่มกล้าออกไปข้างนอก เพราะมี{A}อยู่ข้างๆ","{H}รู้ว่าคนที่ส่งของมาให้ก็เหงาไม่ต่างกัน"],
+    low:["{A}ต้องจากไป และ{H}กลับไปเงียบเหมือนเดิม","{H}รู้ตัวว่ายังหนีเรื่องที่{wound}อยู่"],
+    climax:["{H}ตัดสินใจเปิดประตูออกไปเองเป็นครั้งแรก","{H}พูดทุกอย่างที่เก็บไว้ออกมา"]},
+  "ลึกลับ": {places:["คฤหาสน์เก่าบนเนินเขา","เมืองชายแดนที่คนหายบ่อย","โรงเรียนประจำกลางป่า"],
+    inciting:["มีคนหายตัวไป สิ่งเดียวที่เหลือคือ{item}","{H}ได้รับข้อความลึกลับจากคนที่รู้ว่า{H}{secret}"],
+    mid:["เบาะแสทั้งหมดชี้ไปที่{A} คนที่{H}ไว้ใจที่สุด","{H}พบว่าคดีนี้เกี่ยวข้องกับเรื่องที่{wound}"],
+    low:["{V}ลบหลักฐานทั้งหมด และ{H}กลายเป็นผู้ต้องสงสัยแทน","{A}หายตัวไปอีกคน"],
+    climax:["{H}วางกับดักโดยใช้{item}ล่อ{V}","{H}ไขปริศนาได้จากความผิดพลาดเล็กๆ ที่{V}มองข้าม"]},
+  "น่ากลัว": {places:["หมู่บ้านร้างกลางหุบเขา","โรงพยาบาลที่ปิดตัวไปแล้ว","หอพักที่ห้องหนึ่งถูกล็อกไว้ตลอด"],
+    inciting:["{H}ย้ายมาที่{place} และเริ่มได้ยินเสียงเรียกชื่อตัวเองตอนตีสาม","{H}หยิบ{item}ติดมือกลับมา และทุกอย่างก็เริ่มผิดปกติ"],
+    mid:["{H}รู้ว่าสิ่งนั้นต้องการให้รู้ความจริงบางอย่าง และมันเกี่ยวกับ{A}","สิ่งที่หลอกหลอนเริ่มเลียนเสียงคนที่{H}รัก"],
+    low:["{A}ถูกสิ่งนั้นพาตัวไป","{H}ต้องเจอความกลัว{fear}ในแบบที่เลวร้ายที่สุด"],
+    climax:["{H}ทำพิธีปลดปล่อยด้วย{item} ก่อนเที่ยงคืน","{H}ยอมรับความผิดในอดีต และคำสาปก็คลายลง"]},
+  "แอ็กชัน/แฟนตาซี": {places:["อาณาจักรที่แตกเป็นสามฝ่าย","เมืองลอยฟ้าที่กำลังร่วง","โลกหลังสงครามเวทมนตร์"],
+    inciting:["{V}บุกโจมตี{place} และ{H}ต้องหนีออกมาพร้อม{item}","พลังที่ซ่อนอยู่ในตัว{H}ตื่นขึ้นกลางที่สาธารณะ"],
+    mid:["{H}ชนะศึกแรก แต่รู้ว่า{V}แค่ทดสอบเท่านั้น","{H}รู้ความจริงว่าตัวเอง{secret}"],
+    low:["{A}บาดเจ็บหนักเพราะนิสัย{flaw}ของ{H}","{V}ยึด{item}ไปได้ และฝ่ายของ{H}แตกกระจาย"],
+    climax:["{H}เผชิญหน้า{V}ในศึกสุดท้าย และใช้พลังที่เคยกลัว","{H}รวมทุกคนกลับมาสู้ด้วยแผนที่ไม่มีใครคาดคิด"]},
+  "ตลก": {places:["คาเฟ่แมวที่ใกล้เจ๊ง","กองถ่ายละครหลังข่าว","บริษัทสตาร์ทอัพที่วุ่นวาย"],
+    inciting:["{H}โกหกเล็กๆ ว่าคบกับ{A} แล้วเรื่องก็บานปลาย","{H}ต้องดูแล{item}แทนเจ้านายหนึ่งสัปดาห์ และมันหายไปตั้งแต่วันแรก"],
+    mid:["แผนของ{H}เกือบสำเร็จ จนกระทั่ง{V}โผล่มาผิดเวลา","{H}กับ{A}ต้องปลอมตัวเข้างานเดียวกันโดยไม่รู้ว่าอีกฝ่ายก็มา"],
+    low:["ทุกคำโกหกถูกเปิดโปงพร้อมกันกลางงาน","{A}โกรธจริงจังเป็นครั้งแรก"],
+    climax:["{H}ยอมเสียหน้าครั้งใหญ่เพื่อแก้ไขทุกอย่าง","{H}ใช้ทักษะ{skill}กู้สถานการณ์ได้แบบเฉียดฉิว"]}
+};
+const CONFLICTS = {"คนกับคน":"คู่แข่งที่ยังไม่เปิดตัว","คนกับตัวเอง":"ความกลัว{fear}ในใจของ{H}","คนกับสังคม":"กฎของ{place}","คนกับสิ่งเหนือธรรมชาติ":"พลังที่มองไม่เห็นใน{place}"};
+
+const fill = (s, ctx) => s.replace(/\{(\w+)\}/g, (_, k) => ctx[k] ?? "");
+
+function generate(st){
+  const cs = st.chars.filter(c => c.name);
+  const H = cs.find(c => c.role === "ตัวเอก") || cs[0];
+  if (!H) return null;
+  const Vc = cs.find(c => c !== H && c.role === "ตัวร้าย");
+  const A = cs.find(c => c !== H && c !== Vc && ["คู่พระ/นาง","เพื่อนสนิท","ผู้ชี้ทาง"].includes(c.role)) || cs.find(c => c !== H && c !== Vc);
+  const p = st.plot, g = PLOTS[p.genre];
+  const ctx = {H:H.name, A:A?.name || "คนแปลกหน้าคนหนึ่ง", place:p.setting || pick(g.places)};
+  for (const k of ["want","fear","flaw","secret","wound","item","skill"]) ctx[k] = H[k] || pick(POOL[k]);
+  ctx.V = Vc?.name || fill(CONFLICTS[p.conflict], ctx);
+  const pools = {...BEATS, inciting:g.inciting, mid:g.mid, low:g.low, climax:g.climax, resolve:ENDINGS[p.ending]};
+  const [sName, beats] = STRUCTURES[p.structure], n = beats.length, N = Math.max(1, +p.chapters || n);
+  const outline = beats.map(([title, slot], i) => {
+    const a = Math.floor(i * N / n) + 1, b = Math.max(a, Math.floor((i + 1) * N / n));
+    return {title, chapters: a === b ? "ตอนที่ " + a : "ตอนที่ " + a + "–" + b, text: fill(pick(pools[slot]), ctx)};
+  });
+  const traits = (H.traits || []).join(" ") || "ธรรมดา";
+  const logline = `${H.name}${H.job ? " " + H.job : ""} ผู้${traits} แต่ติดนิสัย${ctx.flaw} ต้องการ${ctx.want} ที่${ctx.place}${Vc || p.conflict !== "คนกับตัวเอง" ? " โดยมี" + ctx.V + "ขวางทาง" : ""} และสิ่งที่ต้องก้าวข้ามคือความกลัว${ctx.fear}`;
+  const links = cs.filter(c => c !== H).map(c => c === Vc
+    ? `${c.name} ขวางทาง${H.name} เพราะอยาก${c.want || "ได้สิ่งเดียวกัน"} และรู้จุดอ่อนคือ${ctx.fear}`
+    : `${c.name} (${c.role || "ตัวละคร"}) ช่วยเติมสิ่งที่${H.name}ขาด ด้วยความ${(c.traits || [])[0] || "จริงใจ"}${c.skill ? " และทักษะ" + c.skill : ""}`);
+  return {logline, premise: p.premise, structure: sName, outline, links, H, cast: cs, tips: TIPS[p.genre]};
+}
+
+// ===== Studio UI =====
+const SKEY = "novel-lens-studio";
+const blankChar = role => ({role, traits: []});
+let studio = (() => { try { return JSON.parse(localStorage.getItem(SKEY)); } catch { return null; } })()
+  || {chars: [blankChar("ตัวเอก")], cur: 0, plot: {genre: "รัก/ละมุน", structure: "three", conflict: "คนกับคน", ending: "สุขนิยม", chapters: 12, setting: "", premise: ""}};
+const saveStudio = () => { try { localStorage.setItem(SKEY, JSON.stringify(studio)); } catch {} };
+const sstatus = $("sstatus");
+
+function input(id, value, onInput, attrs = {}){
+  const n = el("input", {id, ...attrs}); n.value = value ?? ""; n.addEventListener("input", () => onInput(n.value)); return n;
+}
+function select(id, value, options, onChange){
+  const n = el("select", {id}, options.map(([v, label]) => { const o = el("option", {value: v}, label); o.selected = v === value; return o; }));
+  n.addEventListener("change", () => onChange(n.value)); return n;
+}
+const rollBtn = fn => { const b = el("button", {class: "ghost sm", type: "button"}, "สุ่ม"); b.onclick = fn; return b; };
+
+function renderCharTabs(){
+  const box = $("charTabs");
+  box.replaceChildren(...studio.chars.map((c, i) => {
+    const b = el("button", {class: "ghost sm", "aria-pressed": String(i === studio.cur)}, c.name || "ตัวละคร " + (i + 1));
+    b.onclick = () => { studio.cur = i; saveStudio(); renderChar(); };
+    return b;
+  }), Object.assign(el("button", {class: "sm"}, "+ เพิ่มตัวละคร"), {onclick: () => {
+    studio.chars.push(blankChar(studio.chars.length === 1 ? "คู่พระ/นาง" : "ตัวละครรอง")); studio.cur = studio.chars.length - 1; saveStudio(); renderChar();
+  }}));
+}
+
+function renderChar(){
+  renderCharTabs();
+  const c = studio.chars[studio.cur];
+  $("charForm").replaceChildren(...FIELDS.map(([group, fields], gi) => el("details", gi < 3 ? {open: ""} : {}, el("summary", {}, group),
+    el("div", {class: "form"}, fields.map(([k, label, opts]) => {
+      const id = "c-" + k;
+      let control;
+      if (opts) control = select(id, c[k] || "", [["", "-"], ...opts.map(o => [o, o])], v => { c[k] = v; saveStudio(); });
+      else if (k === "traits") control = el("div", {class: "toggle", id}, POOL.traits.map(t => {
+        const b = el("button", {type: "button", "aria-pressed": String((c.traits || []).includes(t))}, t);
+        b.onclick = () => {
+          const on = (c.traits ||= []).includes(t);
+          if (!on && c.traits.length >= 3) { sstatus.textContent = "เลือกนิสัยได้สูงสุด 3 อย่าง"; return; }
+          c.traits = on ? c.traits.filter(x => x !== t) : [...c.traits, t]; saveStudio(); renderChar();
+        };
+        return b;
+      }));
+      else control = input(id, c[k], v => { c[k] = v; saveStudio(); if (k === "name") renderCharTabs(); }, POOL[k] ? {placeholder: "เช่น " + POOL[k][0]} : {});
+      const roll = POOL[k] || opts ? rollBtn(() => { rollField(c, k); saveStudio(); renderChar(); }) : null;
+      return el("div", {class: "field"}, el("label", {for: id}, label), el("div", {class: "in"}, control, k === "traits" ? null : roll));
+    })))));
+}
+$("rollChar").onclick = () => {
+  const c = studio.chars[studio.cur];
+  for (const [, fields] of FIELDS) for (const [k] of fields) if (k !== "role" || !c.role) rollField(c, k);
+  saveStudio(); renderChar();
+};
+$("delChar").onclick = () => {
+  if (studio.chars.length === 1) { studio.chars = [blankChar("ตัวเอก")]; }
+  else { studio.chars.splice(studio.cur, 1); studio.cur = Math.max(0, studio.cur - 1); }
+  saveStudio(); renderChar();
+};
+
+function renderPlot(){
+  const p = studio.plot, set = k => v => { p[k] = v; saveStudio(); };
+  const f = (label, id, control, roll) => el("div", {class: "field"}, el("label", {for: id}, label), el("div", {class: "in"}, control, roll));
+  const setting = input("p-setting", p.setting, set("setting"), {placeholder: "เว้นว่างไว้ ระบบจะสุ่มตามแนว"});
+  const premise = el("textarea", {id: "p-premise", placeholder: "ถ้ามีไอเดียอยู่แล้ว เขียนไว้ตรงนี้"}); premise.value = p.premise || ""; premise.addEventListener("input", () => set("premise")(premise.value));
+  $("plotForm").replaceChildren(
+    f("แนวเรื่อง", "p-genre", select("p-genre", p.genre, Object.keys(PLOTS).map(k => [k, GENRE[k] + " · " + k]), set("genre"))),
+    f("โครงเรื่อง", "p-structure", select("p-structure", p.structure, Object.entries(STRUCTURES).map(([k, v]) => [k, v[0]]), set("structure"))),
+    f("ความขัดแย้งหลัก", "p-conflict", select("p-conflict", p.conflict, Object.keys(CONFLICTS).map(k => [k, k]), set("conflict"))),
+    f("ตอนจบ", "p-ending", select("p-ending", p.ending, Object.keys(ENDINGS).map(k => [k, k]), set("ending"))),
+    f("จำนวนตอน", "p-chapters", input("p-chapters", p.chapters, set("chapters"), {type: "number", min: "1", max: "200", inputmode: "numeric"})),
+    f("ฉาก / โลกของเรื่อง", "p-setting", setting, rollBtn(() => { p.setting = pick(PLOTS[p.genre].places); saveStudio(); renderPlot(); })),
+    f("ไอเดียตั้งต้น", "p-premise", premise));
+}
+
+let lastStory = null;
+function makeStory(refill){
+  if (refill) for (const c of studio.chars) for (const [, fields] of FIELDS) for (const [k] of fields) {
+    if (k !== "note" && (k === "traits" ? !(c.traits || []).length : !c[k])) rollField(c, k);
+  }
+  saveStudio(); renderChar();
+  lastStory = generate(studio);
+  renderStory(lastStory);
+  sstatus.textContent = refill ? "เติมช่องที่ว่างให้แล้ว แก้ได้ทุกช่องแล้วกดสร้างใหม่" : "";
+}
+$("gen").onclick = () => makeStory(true);
+$("useRef").onclick = () => {
+  const top = ref && topFeels(ref)[0];
+  if (!top) { sstatus.textContent = "ยังไม่มีผลวิเคราะห์ ไปที่แท็บแกะนิยายแล้วกดวิเคราะห์ก่อน"; return; }
+  studio.plot.genre = top[0]; saveStudio(); renderPlot();
+  sstatus.textContent = "ตั้งแนวเป็น " + GENRE[top[0]] + " ตามผลวิเคราะห์ล่าสุด";
+};
+
+const look = c => [c.build, c.hair, c.eyes, c.mark, c.style].filter(Boolean).join(" · ");
+function storyText(s){
+  return [
+    "แก่นเรื่อง: " + s.logline, s.premise ? "ไอเดียตั้งต้น: " + s.premise : "", "",
+    "ตัวละคร", ...s.cast.map(c => `- ${c.name}${c.nick ? " (" + c.nick + ")" : ""} · ${c.role || ""} · ${c.age ? "อายุ " + c.age : ""} ${c.job || ""}\n  ${look(c)}\n  นิสัย: ${(c.traits || []).join(", ")} · ข้อเสีย: ${c.flaw || "-"}\n  อยากได้: ${c.want || "-"} · กลัว: ${c.fear || "-"} · ปม: ${c.wound || "-"} · ความลับ: ${c.secret || "-"}`),
+    "", "ความสัมพันธ์", ...s.links.map(l => "- " + l),
+    "", "โครงเรื่อง (" + s.structure + ")", ...s.outline.map(o => `- ${o.chapters} ${o.title}: ${o.text}`)
+  ].filter(x => x !== null).join("\n");
+}
+
+function renderStory(s){
+  if (!s) { $("story").replaceChildren(el("p", {class: "note"}, "ใส่ชื่อตัวละครอย่างน้อยหนึ่งตัวก่อน")); return; }
+  const copy = el("button", {class: "ghost"}, "คัดลอกเป็นข้อความ");
+  copy.onclick = async () => {
+    try { await navigator.clipboard.writeText(storyText(s)); copy.textContent = "คัดลอกแล้ว"; }
+    catch { const t = el("textarea", {class: "copyout", readonly: ""}); t.value = storyText(s); copy.after(t); t.select(); copy.textContent = "กด Ctrl+C เพื่อคัดลอก"; }
+  };
+  const reroll = el("button", {}, "สุ่มเหตุการณ์ใหม่");
+  reroll.onclick = () => makeStory(false);
+  $("story").replaceChildren(...[
+    el("div", {class: "storyhead"}, el("span", {class: "tag"}, "พล็อตที่สร้าง · " + s.structure), el("p", {class: "logline"}, s.logline),
+      s.premise ? el("p", {class: "note"}, "ไอเดียตั้งต้น: " + s.premise) : null),
+    sec("ตัวละคร", el("div", {class: "chars"}, s.cast.map(c => el("div", {class: "char"},
+      el("b", {}, c.name + (c.nick ? " (" + c.nick + ")" : "")), el("span", {class: "role"}, [c.role, c.age && "อายุ " + c.age, c.job].filter(Boolean).join(" · ")),
+      look(c) ? el("p", {class: "note"}, look(c)) : null,
+      (c.traits || []).length ? el("div", {class: "chips"}, c.traits.map(t => el("span", {}, t))) : null,
+      dl([["ข้อเสีย", c.flaw], ["อยากได้", c.want], ["กลัว", c.fear], ["ปมในอดีต", c.wound], ["ความลับ", c.secret], ["ครอบครัว", c.family], ["ทักษะ", c.skill], ["ของสำคัญ", c.item], ["วิธีพูด", c.speech]].filter(x => x[1])))))),
+    s.links.length ? sec("ความสัมพันธ์", list(s.links)) : null,
+    sec("โครงเรื่อง", el("ol", {class: "beats"}, s.outline.map(o => el("li", {class: "beat"},
+      el("div", {}, el("b", {}, o.title), el("span", {class: "note"}, o.chapters)), el("p", {}, o.text))))),
+    sec("เคล็ดลับเขียนแนวนี้", list([s.tips.p, s.tips.c, "เลี่ยง: " + s.tips.a])),
+    el("div", {class: "row"}, reroll, copy)].filter(Boolean));
+}
+
+for (const [tab, panel] of [["t-analyze", "p-analyze"], ["t-studio", "p-studio"]]) $(tab).onclick = () => {
+  for (const [t, p] of [["t-analyze", "p-analyze"], ["t-studio", "p-studio"]]) { $(t).setAttribute("aria-selected", String(t === tab)); $(p).hidden = p !== panel; }
+};
+renderChar(); renderPlot();
+</script>
+</body>
+</html>
