@@ -418,6 +418,36 @@ function arc(text, parts = 6){
   });
 }
 
+// ===== Input integrity guard: don't mistake protected-font glyphs for readable prose =====
+function inspectTextQuality(raw){
+  const text=String(raw||"").trim();
+  const size=[...text].length||1;
+  const pua=(text.match(/[\uE000-\uF8FF]/g)||[]).length;
+  const replacement=(text.match(/\uFFFD/g)||[]).length;
+  const controls=(text.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g)||[]).length;
+  const thai=(text.match(/[\u0E00-\u0E7F]/g)||[]).length;
+  const puaRatio=pua/size, replacementRatio=replacement/size;
+  const protectedFont=pua>=8 && puaRatio>=0.008;
+  const damagedEncoding=(replacement>=3 && replacementRatio>=0.002) || controls>=4;
+  let reason="";
+  if(protectedFont) reason="พบอักขระในช่วง Private Use Area จำนวน "+pua.toLocaleString()+" ตัว ซึ่งมักเป็นสัญญาณว่าหน้าเว็บใช้ฟอนต์แทนอักขระจริง ข้อความที่ดึงจาก DOM จึงไม่ใช่ภาษาไทยที่อ่านได้โดยตรง";
+  else if(damagedEncoding) reason="พบอักขระทดแทนหรือ control characters จำนวนมาก ข้อความอาจเสียหายระหว่างคัดลอกหรือถอดรหัส";
+  return {
+    ok:!protectedFont&&!damagedEncoding,
+    size,pua,replacement,controls,thai,
+    puaRatio,replacementRatio,
+    issue:protectedFont?"protected-font":damagedEncoding?"encoding-damage":"",
+    message:reason
+  };
+}
+
+function feelEvidence(text){
+  return Object.entries(FEELS).map(([genre,rawWords])=>{
+    return {genre,terms:rawWords.split(" ").map(word=>({word,hits:count(text,word)})).filter(x=>x.hits>0).sort((a,b)=>b.hits-a.hits).slice(0,5)};
+  }).map(x=>Object.assign(x,{total:x.terms.reduce((n,t)=>n+t.hits,0)}))
+   .filter(x=>x.total>0).sort((a,b)=>b.total-a.total);
+}
+
 function analyze(raw){
   const text = raw.replace(/\r/g, "").trim();
   const chars = text.replace(/\s/g, "").length || 1;
