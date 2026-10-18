@@ -181,6 +181,10 @@ summary::marker{color:var(--pen)}
 .beat p{max-width:none;margin:0;font-family:var(--serif);line-height:1.8}
 .beat p[contenteditable]:hover{background:color-mix(in srgb,var(--hl) 35%,transparent)}
 .copyout{min-height:120px;margin-top:8px}
+.file-import{width:100%;padding:10px 0;color:var(--pencil);font:inherit}
+.quality-warning{background:var(--paper);border:2px solid var(--pen);border-left-width:8px;padding:24px;border-radius:4px;box-shadow:var(--lift)}
+.quality-warning h2{font-family:var(--serif);font-size:23px;margin:0 0 10px;color:var(--pen)}
+.quality-warning p{margin:8px 0}
 
 /* ReadAWrite import desk */
 .rw-panel{max-width:1000px;margin:0 auto;display:grid;gap:22px}
@@ -246,7 +250,10 @@ summary::marker{color:var(--pen)}
           <a class="bm" id="bm" href="#">ดึงเข้าห้องแกะนิยาย</a>
         </div>
         <label for="src">ต้นฉบับที่จะวิเคราะห์</label>
-        <textarea id="src" placeholder="กดปุ่มดึงนิยายจากหน้าตอน หรือวางข้อความเองที่นี่"></textarea>
+        <textarea id="src" placeholder="วางข้อความที่อ่านได้ หรือเปิดไฟล์ .txt / .md ของคุณ"></textarea>
+        <label for="file-import">หรือเปิดไฟล์ต้นฉบับของคุณ (.txt / .md)</label>
+        <input id="file-import" class="file-import" type="file" accept=".txt,.md,text/plain,text/markdown">
+        <p class="note">แนะนำให้วิเคราะห์จากต้นฉบับที่เป็นข้อความอ่านได้ หากระบบ ReadAWrite แสดงอักขระแปลก ๆ หลังดึงมา จะหยุดการวิเคราะห์แทนการเดาเนื้อหา</p>
         <div class="row">
           <button id="go">วิเคราะห์</button>
           <button id="clear" class="ghost">ล้างข้อความ</button>
@@ -319,6 +326,34 @@ const FEELS = {
   "ตลก": "หัวเราะ ฮา ขำ ตลก แซว 555 ฮ่าๆ กวนประสาท บ้าบอ เอ๋อ ขำขัน มุก ปั่นหัว ฮาก๊าก"
 };
 const GENRE = {"รัก/ละมุน":"โรแมนซ์","เศร้า":"ดราม่า","เหงา/สงบ":"ดราม่าชีวิต","ลึกลับ":"ลึกลับ/สืบสวน","น่ากลัว":"สยองขวัญ","แอ็กชัน/แฟนตาซี":"แอ็กชัน/แฟนตาซี","ตลก":"คอมเมดี้"};
+const GENRE_CLUES = {
+  "โรแมนซ์": ["รัก","ตกหลุมรัก","ชอบเธอ","ชอบเขา","แฟน","คนรัก","คู่หมั้น","แต่งงาน","สารภาพรัก","หึง","เดต","จูบ","ความสัมพันธ์","หัวใจเต้น","รักแรก"],
+  "ดราม่า": ["เสียใจ","สูญเสีย","ครอบครัว","แตกสลาย","หย่าร้าง","ความทรงจำ","อดีต","ให้อภัย","ความผิด","เจ็บปวด","น้ำตา","จากลา","ความลับในครอบครัว"],
+  "ลึกลับ/สืบสวน": ["ปริศนา","สืบสวน","นักสืบ","เบาะแส","หลักฐาน","ผู้ต้องสงสัย","ฆาตกรรม","ฆาตกร","ศพ","คดี","หายตัว","ร่องรอย","สอบสวน","ไขคดี","ความจริง"],
+  "สยองขวัญ": ["ผี","วิญญาณ","ปีศาจ","คำสาป","หลอน","สยอง","ขนลุก","บ้านร้าง","อาถรรพ์","เลือด","ศพ","เสียงประหลาด","เงาดำ","ถูกสิง"],
+  "แฟนตาซี": ["เวทมนตร์","เวทมนต์","พลังวิเศษ","มังกร","เอลฟ์","อาณาจักร","คำสาป","ผู้กล้า","แม่มด","พ่อมด","เผ่าพันธุ์","ต่างโลก","เวท","ดันเจี้ยน","เทพเจ้า"],
+  "แอ็กชัน": ["ต่อสู้","ไล่ล่า","ยิงปืน","ระเบิด","ดาบ","สงคราม","โจมตี","หนีตาย","บุก","ปะทะ","ภารกิจ","นักฆ่า","บอดี้การ์ด","อาวุธ"],
+  "คอมเมดี้": ["ตลก","ขำ","หัวเราะ","มุก","กวนประสาท","ฮา","ขายขำ","โป๊ะ","ปั่นประสาท","วุ่นวาย","555","ฮ่าๆ"],
+  "ชีวิตประจำวัน": ["ชีวิตประจำวัน","โรงเรียน","มหาวิทยาลัย","ห้องเรียน","เพื่อนสนิท","ทำงาน","ร้านกาแฟ","หอพัก","ชีวิตวัยรุ่น","กิจวัตร","เพื่อนร่วมงาน"],
+  "อาชญากรรม": ["มาเฟีย","องค์กรอาชญากรรม","แก๊ง","ฟอกเงิน","ปล้น","ค้ายา","ตำรวจ","อาชญากรรม","มือปืน","เจ้าพ่อ","ใต้ดิน","อิทธิพลมืด"],
+  "ไซไฟ": ["หุ่นยนต์","ปัญญาประดิษฐ์","AI","จักรวาล","อวกาศ","ยานอวกาศ","เดินทางข้ามเวลา","โลกอนาคต","ไซบอร์ก","เทคโนโลยี","ทดลอง","มิติ"],
+  "ย้อนยุค/ประวัติศาสตร์": ["ย้อนยุค","ราชวงศ์","กษัตริย์","ขุนนาง","วังหลวง","ยุคโบราณ","ประวัติศาสตร์","สงครามโลก","สมัยก่อน","เจ้าหญิง","องค์ชาย","บรรดาศักดิ์"]
+};
+function classifyGenres(text){
+  const normalized=String(text||"").replace(/\\s+/g," ");
+  const rows=Object.entries(GENRE_CLUES).map(([genre,terms])=>{
+    const evidence=terms.map(term=>({term,hits:count(normalized,term)})).filter(x=>x.hits>0)
+      .sort((a,b)=>b.hits-a.hits).slice(0,6);
+    const raw=evidence.reduce((n,x)=>n+x.hits*(x.term.length>=5?2:1),0);
+    const distinct=evidence.length;
+    return {genre,score:raw,distinct,evidence};
+  }).filter(x=>x.score>0).sort((a,b)=>b.score-a.score);
+  const best=rows[0], second=rows[1];
+  if(!best) return {label:"ยังระบุแนวไม่ได้",confidence:"ไม่มีหลักฐาน",detail:"ไม่พบคำชี้เฉพาะจากรายการคำแนวเรื่อง ระบบจะไม่เดาแนวจากความรู้สึกอย่างเดียว",matches:[],evidence:[]};
+  const confidence=best.distinct>=3 && best.score>=6 && best.score>=(second?.score||0)*1.25 ? "มีหลักฐานคำค่อนข้างชัด"
+    : best.distinct>=2 && best.score>=3 ? "มีแนวโน้ม แต่ควรตรวจทาน" : "หลักฐานน้อย";
+  return {label:best.genre,confidence,detail:"ประเมินจากคำชี้เฉพาะในข้อความ ไม่ได้เข้าใจพล็อตเชิงความหมายเต็มรูปแบบ",matches:rows.slice(0,3),evidence:best.evidence};
+}
 const TIPS = {
   "รัก/ละมุน":{p:"ให้ความรู้สึกโตขึ้นทีละนิดผ่านการกระทำเล็กๆ (สบตา ยื่นของ) มากกว่าการสารภาพตรงๆ",c:"ให้คู่หลักมีจุดที่ขัดกันชัดๆ หนึ่งเรื่อง ความสัมพันธ์จะมีแรงดึง",a:"อย่าให้ตัวละครพูดว่ารักเร็วเกินไป"},
   "เศร้า":{p:"ปล่อยให้สิ่งของหรือฉากแทนความเศร้า ไม่ต้องบอกว่าเศร้า",c:"ให้ตัวละครมีสิ่งที่เสียไปชัดเจน และสิ่งที่ยังยึดไว้",a:"อย่าบรรยายการร้องไห้ยาวหลายย่อหน้า"},
@@ -405,7 +440,7 @@ function characters(text, cands){
     const feel = Object.entries(feelScores(near)).sort((a, b) => b[1] - a[1])[0];
     return {name, mentions, acts, lines, traits, mood: feel?.[1] ? feel[0] : ""};
   }).filter(c => c.acts >= 2 || (c.acts >= 1 && c.lines >= 1))
-    .map((c, i) => ({...c, role: i === 0 ? "ตัวเอก (ถูกพูดถึงมากที่สุด)" : "ตัวละครรอง"}));
+    .map((c, i) => ({...c, role: i === 0 ? "คำ/ชื่อที่ถูกพูดถึงมากที่สุด (ไม่ยืนยันว่าเป็นตัวเอก)" : "คำ/ชื่อที่อาจเป็นตัวละคร"}));
 }
 
 // Emotion arc: the same feel scores, measured slice by slice through the chapter.
@@ -416,6 +451,46 @@ function arc(text, parts = 6){
     const top = Object.entries(f).sort((a, b) => b[1] - a[1])[0];
     return {total: sum(Object.values(f)), top: top[1] ? top[0] : "เรียบ"};
   });
+}
+
+// ===== Input integrity guard: don't mistake protected-font glyphs for readable prose =====
+function inspectTextQuality(raw){
+  const text=String(raw||"").trim();
+  const chars=[...text], size=chars.length||1;
+  const pua=(text.match(/[\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]/gu)||[]).length;
+  const replacement=(text.match(/\uFFFD/g)||[]).length;
+  const controls=(text.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g)||[]).length;
+  const thai=(text.match(/[\u0E00-\u0E7F]/g)||[]).length;
+  const zeroWidth=(text.match(/[\u200B-\u200F\u2060\uFEFF]/g)||[]).length;
+  const visibleLetter=(text.match(/[\p{L}\p{N}]/gu)||[]).length;
+  const puaRatio=pua/size, replacementRatio=replacement/size, zeroWidthRatio=zeroWidth/size;
+  // A few unusual characters may be legitimate. These combined signals indicate a broken or obfuscated text layer.
+  const protectedFont=(pua>=5 && puaRatio>=0.003) || (pua>=3 && puaRatio>=0.02);
+  const damagedEncoding=(replacement>=3 && replacementRatio>=0.002) || controls>=4;
+  const suspiciousText=(size>=120 && visibleLetter/size<0.42 && pua+replacement+controls>=4);
+  const excessiveInvisible=(size>=120 && zeroWidth>=12 && zeroWidthRatio>=0.025);
+  let issue="",reason="";
+  if(protectedFont){issue="protected-font";reason="พบอักขระ Private Use Area "+pua.toLocaleString()+" ตัว ("+(puaRatio*100).toFixed(1)+"%) ข้อความจาก DOM อาจเป็นรหัสฟอนต์ ไม่ใช่ภาษาไทยจริง";}
+  else if(damagedEncoding){issue="encoding-damage";reason="พบอักขระทดแทนหรือ control characters มากผิดปกติ ข้อความอาจเสียหายระหว่างคัดลอก";}
+  else if(excessiveInvisible){issue="invisible-characters";reason="พบอักขระ zero-width จำนวนมากผิดปกติ ข้อความอาจถูกแปลงรูปแบบหรือคัดลอกมาไม่สมบูรณ์";}
+  else if(suspiciousText){issue="suspicious-text";reason="สัดส่วนตัวอักษรที่อ่านได้ต่ำผิดปกติเมื่อเทียบกับความยาวข้อความ จึงไม่มั่นใจว่าเป็นต้นฉบับที่สะอาด";}
+  return {ok:!issue,size,pua,replacement,controls,thai,zeroWidth,visibleLetter,puaRatio,replacementRatio,zeroWidthRatio,issue,message:reason};
+}
+
+function classifyEvidence(evidence){
+  if(!evidence.length) return {label:"ข้อมูลไม่พอ",detail:"ไม่พบคำจากรายการคำอารมณ์ จึงไม่ควรฟันธงแนวเรื่อง"};
+  const first=evidence[0], second=evidence[1];
+  const distinct=first.terms.length;
+  const gap=first.total-(second?.total||0);
+  if(first.total<3 || distinct<2) return {label:"ต่ำ",detail:"พบหลักฐานน้อยเกินไปหรือกระจายไม่ชัด ควรตรวจผลด้วยตัวเอง"};
+  if(first.total>=8 && distinct>=3 && gap>=2) return {label:"ค่อนข้างชัดตามกฎคำ",detail:"มีคำหลักหลายคำสนับสนุนแนวนี้ แต่ยังไม่ใช่การตีความความหมายระดับมนุษย์"};
+  return {label:"ปานกลาง/คาบเกี่ยว",detail:"มีคำสนับสนุนมากกว่าหนึ่งกลุ่ม แนวเรื่องอาจผสมกันหรือยังต้องดูบริบท"};
+}
+function feelEvidence(text){
+  return Object.entries(FEELS).map(([genre,rawWords])=>{
+    return {genre,terms:rawWords.split(" ").map(word=>({word,hits:count(text,word)})).filter(x=>x.hits>0).sort((a,b)=>b.hits-a.hits).slice(0,5)};
+  }).map(x=>Object.assign(x,{total:x.terms.reduce((n,t)=>n+t.hits,0)}))
+   .filter(x=>x.total>0).sort((a,b)=>b.total-a.total);
 }
 
 function analyze(raw){
@@ -442,6 +517,9 @@ function analyze(raw){
     pov: first > third * 0.6 && first > 0 ? "บุคคลที่หนึ่ง (ผม/ฉัน เล่าเอง)" : "บุคคลที่สาม (เล่าจากข้างนอก)",
     lang: literary > 2 ? "สละสลวยแบบวรรณกรรม" : rough > polite ? "ภาษาพูดกันเอง ห้วนๆ" : polite > 2 ? "สุภาพ มีหางเสียง" : "เรียบง่าย ภาษาปัจจุบัน",
     feel: feelScores(text),
+    evidence: feelEvidence(text),
+    genreEvidence: classifyEvidence(feelEvidence(text)),
+    genreAnalysis: classifyGenres(text),
     opens: /^["“‘]/.test(paras[0] || "") ? "บทพูด" : "บรรยาย",
     ends: /[?…]|\.\.\.|['’]$/.test((paras.at(-1) || "").slice(-3)) ? "ทิ้งคำถาม/ค้างไว้" : /["”]$/.test(paras.at(-1) || "") ? "บทพูด" : "บรรยาย",
     words,
@@ -512,6 +590,18 @@ const SAMPLE_TEXT = `ฝนตกตั้งแต่บ่ายสาม แ�
 const $ = id => document.getElementById(id);
 const src = $("src"), report = $("report"), status = $("status");
 let ref = null, isExample = true;
+const ANALYSIS_SESSION_KEY = "novellens.analysis.session.v1";
+function saveAnalysisSession(text){
+  try {
+    const value=String(text||"");
+    if(value.trim() && inspectTextQuality(value).ok) localStorage.setItem(ANALYSIS_SESSION_KEY,JSON.stringify({text:value,updatedAt:new Date().toISOString()}));
+    else localStorage.removeItem(ANALYSIS_SESSION_KEY);
+  } catch(_) {}
+}
+function restoreAnalysisSession(){
+  try { const value=JSON.parse(localStorage.getItem(ANALYSIS_SESSION_KEY)||"null"); return value && typeof value.text==="string" && inspectTextQuality(value.text).ok ? value : null; }
+  catch(_) { return null; }
+}
 
 function el(tag, attrs = {}, ...kids){
   const n = document.createElement(tag);
@@ -528,13 +618,19 @@ function render(a){
   report.replaceChildren(
     el("div", {},
       el("span", {class:"tag"}, isExample ? "ตัวอย่าง: ผลวิเคราะห์ของข้อความตัวอย่าง" : "ผลวิเคราะห์"),
-      el("div", {class:"genre"}, feels.length ? feels.slice(0, 2).map(([k]) => GENRE[k]).join(" + ") : "ยังจับแนวไม่ได้"),
+      el("div", {class:"genre"}, a.genreAnalysis?.label || (feels.length ? feels.slice(0, 2).map(([k]) => GENRE[k]).join(" + ") : "ยังจับแนวไม่ได้")),
+      el("p", {class:"note"}, "แนวจากคำชี้เฉพาะ: " + (a.genreAnalysis?.confidence || "ระบบเดิม") + " — " + (a.genreAnalysis?.detail || "ระบบเทียบคำสำคัญ")),
+      a.genreAnalysis?.evidence?.length ? el("p", {class:"note"}, "หลักฐาน: " + a.genreAnalysis.evidence.map(x => x.term + " ×" + x.hits).join(" · ")) : null,
       el("p", {class:"note"}, "ประเมินจากคำที่ใช้ " + a.chars.toLocaleString() + " ตัวอักษร " + a.paraCount + " ย่อหน้า" + (a.chars < 800 ? " · ข้อความสั้น ผลอาจคลาดเคลื่อน" : ""))),
-    sec("เนื้อเรื่องโดยย่อ (ประโยคสำคัญจากต้นฉบับ)", a.summary.length ? el("ol", {class:"summary"}, a.summary.map(s => el("li", {}, s))) : el("p", {class:"note"}, "ข้อความสั้นเกินไป")),
+    sec("ประโยคที่คัดมาเป็นร่างเรื่องย่อ (ไม่ใช่การสรุปความหมายโดยตรง)", a.summary.length ? el("ol", {class:"summary"}, a.summary.map(s => el("li", {}, s))) : el("p", {class:"note"}, "ข้อความสั้นเกินไป")),
+    sec("หลักฐานที่ใช้จับโทน", a.evidence?.length
+      ? el("div", {class:"rw-list"}, a.evidence.slice(0, 4).map(x => el("div", {class:"rw-item"}, el("div", {}, el("b", {}, x.genre), el("p", {}, "พบคำ/วลีตามรายการคำ " + x.total + " ครั้ง"), el("p", {class:"note"}, "ตัวอย่างคำที่พบ: " + x.terms.map(t => t.word + " ×" + t.hits).join(" · "))))))
+      : el("p", {class:"note"}, "ไม่พบคำจากรายการคำอารมณ์ที่ระบบใช้เป็นหลักฐาน")), 
     sec("ฟีลของเรื่อง", feels.length
       ? el("div", {class:"bars"}, feels.flatMap(([k, v]) => [el("span", {}, k), el("div", {class:"bar"}, el("i", {style:"width:" + Math.round(v / max * 100) + "%"})), el("span", {class:"n"}, v.toFixed(1))]))
       : el("p", {}, "ไม่พบคำที่บอกอารมณ์ชัดเจน"),
-      el("p", {class:"note"}, "ตัวเลข = จำนวนคำอารมณ์ต่อ 1,000 ตัวอักษร (ไม่นับคำที่มี ไม่ นำหน้า)")),
+      el("p", {class:"note"}, "ตัวเลข = จำนวนคำอารมณ์ต่อ 1,000 ตัวอักษร (ไม่นับคำที่มี ไม่ นำหน้า)"),
+      el("p", {class:"note"}, "ระดับหลักฐาน: " + (a.genreEvidence?.label || "ไม่ทราบ") + " — " + (a.genreEvidence?.detail || "ระบบเทียบคำสำคัญ ไม่ได้อ่านความหมายทั้งหมด"))),
     sec("อารมณ์ไล่ตามตอน",
       el("div", {class:"arc", role:"img", "aria-label":"ความเข้มอารมณ์ 6 ช่วง จุดสูงสุดอยู่" + a.peak},
         a.curve.map((x, i) => el("div", {}, el("i", {style:"height:" + Math.round(x.total / arcMax * 80) + "%"}), el("span", {}, (i + 1) + " " + x.top)))),
@@ -542,7 +638,7 @@ function render(a){
     el("div", {class:"pair"},
       sec("โทนและจังหวะ", dl([["อารมณ์หลัก", feels[0]?.[0] || "เรียบ"], ["จังหวะ", pace(a)], ["เปิดเรื่องด้วย", a.opens], ["จบตอนด้วย", a.ends]])),
       sec("สไตล์การเขียน", dl([["มุมมอง", a.pov], ["ระดับภาษา", a.lang], ["บทพูด", pct(a.dialogue)], ["ความยาววลี", Math.round(a.clause) + " ตัวอักษร"], ["ย่อหน้า", Math.round(a.para) + " ตัวอักษร"], ["ผัสสะ", a.senses.toFixed(1) + " / 1,000"], ["! ? …", [a.exclaim, a.question, a.ellipsis].map(x => x.toFixed(1)).join(" · ")]]))),
-    sec("ตัวละคร", a.cast.length
+    sec("คำ/ชื่อที่อาจเป็นตัวละคร (ควรตรวจทาน)", a.cast.length
       ? el("div", {class:"chars"}, a.cast.map(c => el("div", {class:"char"},
           el("b", {}, c.name), el("span", {class:"role"}, c.role),
           dl([["ถูกพูดถึง", c.mentions + " ครั้ง"], ["ฉากที่มีบทพูด", c.lines + ""], ["อารมณ์รอบตัว", c.mood || "-"]]),
@@ -564,6 +660,9 @@ function coach(){
   const btn = el("button", {}, "เทียบกับต้นฉบับ");
   const out = el("div", {});
   btn.onclick = () => {
+    if (!ref) { out.replaceChildren(el("p", {class:"note"}, "ต้องมีผลวิเคราะห์จากต้นฉบับที่อ่านได้ก่อน จึงจะเทียบร่างได้")); return; }
+    const draftQuality = inspectTextQuality(box.value);
+    if (!draftQuality.ok) { out.replaceChildren(el("p", {class:"note"}, "ร่างมีอักขระผิดปกติ: " + draftQuality.message)); return; }
     if (box.value.trim().length < 50) { out.replaceChildren(el("p", {class:"note"}, "ใส่ร่างอย่างน้อยสักย่อหน้า ระบบถึงจะวัดได้")); return; }
     const r = compare(ref, analyze(box.value));
     out.replaceChildren(
@@ -577,25 +676,70 @@ function coach(){
     el("div", {class:"coach"}, el("label", {for:"draft"}, "ร่างของคุณ"), box), el("div", {class:"row", style:"margin-top:10px"}, btn), out);
 }
 
+function showQualityWarning(q, place="ต้นฉบับ"){
+  ref = null;
+  const fontMapping = q.issue === "protected-font";
+  const details = "ขนาดข้อความ: " + q.size.toLocaleString() + " ตัวอักษร · อักขระกลุ่มฟอนต์พิเศษ: " + q.pua.toLocaleString() + " · อักขระเสียหาย: " + q.replacement.toLocaleString();
+  const diagnosis = fontMapping
+    ? "ผลตรวจชี้ไปที่ชั้นข้อความ/การแมป glyph ที่อาจใช้ร่วมกับฟอนต์เฉพาะ ไม่ใช่หลักฐานว่า CSS font-family เป็นสาเหตุเพียงอย่างเดียว การเปลี่ยน MEB, Droid Sans, Pridi, Taviraj, Trirong, Garuda, Jindara, Tahoma หรือ System อาจเปลี่ยนรูปลักษณ์ แต่ไม่จำเป็นต้องเปลี่ยนรหัสอักขระที่ NovelLens อ่านได้"
+    : "ผลตรวจพบความผิดปกติของข้อความที่อาจทำให้การวิเคราะห์คลาดเคลื่อน";
+  const nextStep = fontMapping
+    ? "วิธีตรวจอย่างปลอดภัย: บน ReadAWrite ลองเปลี่ยนฟอนต์ แล้วคัดลอกประโยคสั้น ๆ ที่เว็บไซต์อนุญาตให้คัดลอกไปวางใน Notepad หากยังกลายเป็นสัญลักษณ์เดิม แสดงว่าข้อความที่ส่งออกมาไม่ใช่ภาษาไทยปกติ ให้ใช้ข้อความต้นฉบับที่ผู้เขียนอนุญาตหรือไฟล์ที่คุณมีสิทธิ์ใช้แทน"
+    : "วิธีแก้: ใช้ไฟล์ .txt หรือ .md ต้นฉบับที่คุณเป็นเจ้าของ หรือวางข้อความสะอาดที่คุณมีสิทธิ์ใช้";
+  report.replaceChildren(el("section", {class:"quality-warning"},
+    el("span", {class:"tag"}, "ตรวจสอบคุณภาพข้อความ · " + place),
+    el("h2", {}, "ยังวิเคราะห์ไม่ได้อย่างน่าเชื่อถือ"),
+    el("p", {}, q.message || "ข้อความที่นำเข้าอาจไม่สมบูรณ์"),
+    el("p", {}, details),
+    el("p", {}, diagnosis),
+    el("p", {}, "ทำไมต้องหยุด? ตัววิเคราะห์ NovelLens ใช้กฎและรายการคำ ไม่ได้เข้าใจข้อความที่ถูกแปลงเป็นรหัส หากวิเคราะห์ต่อจะมีโอกาสสรุปแนว ตัวละคร และพล็อตผิด"),
+    el("p", {}, nextStep),
+    el("p", {class:"note"}, "NovelLens จะไม่ถอดรหัสฟอนต์เฉพาะหรือหลบกลไกป้องกันการคัดลอกของเว็บไซต์")
+  ));
+  status.textContent = "หยุดการวิเคราะห์: ตรวจพบปัญหาคุณภาพข้อความ";
+}
 function run(){
   const text = src.value.trim();
-  if (!text) { status.textContent = "วางข้อความนิยายหรือกดปุ่มดึงนิยายก่อน"; return; }
-  ref = analyze(text); render(ref); status.textContent = "";
+  if (!text) { status.textContent = "วางข้อความที่อ่านได้หรือเปิดไฟล์ต้นฉบับก่อน"; return; }
+  const quality = inspectTextQuality(text);
+  if (!quality.ok) { saveAnalysisSession(""); showQualityWarning(quality); return; }
+  ref = analyze(text); render(ref); saveAnalysisSession(text); status.textContent = "";
 }
 $("go").onclick = () => { isExample = false; run(); };
-$("clear").onclick = () => { src.value = ""; src.focus(); updateCount(); };
+$("clear").onclick = () => { src.value = ""; try{localStorage.removeItem(ANALYSIS_SESSION_KEY);}catch(_){} src.focus(); updateCount(); report.replaceChildren(); status.textContent = ""; ref = null; };
 const updateCount = () => $("count").textContent = src.value.length.toLocaleString() + " ตัวอักษร";
-src.addEventListener("input", updateCount);
+src.addEventListener("input", () => { updateCount(); saveAnalysisSession(src.value); });
+$("file-import").addEventListener("change", async e => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { status.textContent = "ไฟล์ใหญ่เกิน 5 MB กรุณาใช้ไฟล์ข้อความขนาดเล็กลง"; e.target.value = ""; return; }
+  try {
+    src.value = await file.text();
+    updateCount();
+    isExample = false;
+    run();
+    if (inspectTextQuality(src.value).ok) status.textContent = "เปิดไฟล์ " + file.name + " แล้ว";
+  } catch (_) { status.textContent = "อ่านไฟล์ไม่สำเร็จ กรุณาลองบันทึกเป็น UTF-8 แล้วเปิดใหม่"; }
+});
 
 // --- Receive chapter text from the bookmarklet ---
-const BOOKMARKLET = app => `javascript:(()=>{const APP=${JSON.stringify(app)};let t=String(getSelection()).trim();if(t.length<200){const m=new Map();document.querySelectorAll('p').forEach(p=>{const k=p.parentElement;m.set(k,(m.get(k)||0)+p.innerText.trim().length)});let b=null,n=0;m.forEach((v,k)=>{if(v>n){n=v;b=k}});if(!b||n<=200){alert('ไม่พบเนื้อเรื่องเป็นข้อความบนหน้านี้ ถ้าเว็บมีโหมดอ่านแบบ html ให้สลับไปโหมดนั้น หรือลากคลุมเนื้อเรื่องแล้วกดใหม่');return}t=b.innerText.trim()}const host=location.hostname;const links=[...document.querySelectorAll('a[href]')].filter(a=>/readawrite\\.com$/.test(new URL(a.href,location.href).hostname)&&/\\/a\\//.test(new URL(a.href,location.href).pathname));const storyLink=links.find(a=>a.href!==location.href&&!/ตอนที่|chapter|episode/i.test(a.innerText))?.href||location.href;const title=document.querySelector('h1')?.innerText.trim()||document.querySelector('meta[property="og:title"]')?.content||document.title;const w=window.open(APP,'_blank');const o=new URL(APP).origin;addEventListener('message',function f(e){if(e.source===w&&e.origin===o&&e.data==='novel-ready'){w.postMessage({type:'novel-text',text:t,title:document.title,chapterTitle:title,sourceUrl:location.href,storyUrl:storyLink,sourceHost:host},o);removeEventListener('message',f)}})})()`;
+const BOOKMARKLET = app => `javascript:(()=>{const APP=${JSON.stringify(app)};let t=String(getSelection()).trim();if(t.length<200){const m=new Map();document.querySelectorAll('p').forEach(p=>{const k=p.parentElement;m.set(k,(m.get(k)||0)+p.innerText.trim().length)});let b=null,n=0;m.forEach((v,k)=>{if(v>n){n=v;b=k}});if(!b||n<=200){alert('ไม่พบเนื้อเรื่องเป็นข้อความบนหน้านี้ ถ้าเว็บมีโหมดอ่านแบบ html ให้สลับไปโหมดนั้น หรือลากคลุมเนื้อเรื่องแล้วกดใหม่');return}t=b.innerText.trim()}const host=location.hostname;const links=[...document.querySelectorAll('a[href]')].filter(a=>/readawrite\\.com$/.test(new URL(a.href,location.href).hostname)&&/\\/a\\//.test(new URL(a.href,location.href).pathname));const storyLink=links.find(a=>a.href!==location.href&&!/ตอนที่|chapter|episode/i.test(a.innerText))?.href||location.href;const title=document.querySelector('h1')?.innerText.trim()||document.querySelector('meta[property="og:title"]')?.content||document.title;const w=window.open(APP,'_blank');const o=new URL(APP).origin;addEventListener('message',function f(e){if(e.source===w&&e.origin===o&&e.data==='novel-ready'){w.postMessage({type:'novel-text',text:t,title:document.title,chapterTitle:title,sourceUrl:location.href,storyUrl:storyLink,sourceHost:host,sourceFont:getComputedStyle(document.querySelector("article")||document.querySelector("main")||document.body).fontFamily},o);removeEventListener('message',f)}})})()`;
 $("bm").href = BOOKMARKLET(location.href.split("#")[0]);
 $("bm").onclick = e => { e.preventDefault(); status.textContent = "ลากปุ่มนี้ไปไว้ที่แถบบุ๊กมาร์ก แล้วไปกดที่หน้าตอนนิยาย"; };
 addEventListener("message", e => {
   if (e.source !== window.opener || e.data?.type !== "novel-text") return;
   src.value = String(e.data.text || ""); updateCount();
+  isExample = false;
+  const quality = inspectTextQuality(src.value);
+  if (!quality.ok) {
+    showQualityWarning(quality, "ข้อความจาก Bookmarklet · ฟอนต์ต้นทาง: " + String(e.data.sourceFont || "ไม่ทราบ").slice(0, 100));
+    status.textContent = "ไม่ได้บันทึกข้อความนี้ เพราะตรวจพบอักขระที่อาจถูกแทนด้วยฟอนต์พิเศษ";
+    const rwStatus = document.getElementById("rw-status");
+    if (rwStatus) rwStatus.textContent = "ไม่ได้เพิ่มเข้าคลัง: ข้อความที่ดึงมาอาจไม่ใช่ต้นฉบับที่อ่านได้";
+    return;
+  }
   status.textContent = "ดึงมาแล้ว: " + String(e.data.title || "").slice(0, 80);
-  isExample = false; run();
+  run();
   if (typeof saveReadAWriteImport === "function") {
     const item = saveReadAWriteImport(e.data);
     if (item) {
@@ -607,7 +751,9 @@ addEventListener("message", e => {
 });
 if (window.opener) window.opener.postMessage("novel-ready", "*");
 
-if (!window.opener) src.value = SAMPLE_TEXT;
+const savedAnalysisSession = restoreAnalysisSession();
+if (savedAnalysisSession) { src.value = savedAnalysisSession.text; isExample = false; status.textContent = "กู้คืนข้อความวิเคราะห์จากการใช้งานครั้งก่อนแล้ว"; }
+else if (!window.opener) src.value = SAMPLE_TEXT;
 updateCount(); run();
 </script>
 <script>
@@ -1212,6 +1358,12 @@ const rwEscape = s => String(s || "").replace(/[&<>"']/g, c => ({"&":"&amp;","<"
 function saveReadAWriteImport(data) {
   const text = String(data.text || "").trim();
   const sourceUrl = String(data.sourceUrl || "");
+  const quality = inspectTextQuality(text);
+  if (!quality.ok) {
+    const status = rwGet("rw-status");
+    if (status) status.textContent = "ไม่ได้บันทึก: ข้อความไม่สมบูรณ์หรือมีอักขระจากฟอนต์พิเศษ";
+    return null;
+  }
   if (text.length < 80 || !/^https?:\/\/(?:[^/]+\.)?readawrite\.com\//i.test(sourceUrl)) return null;
   const items = readAWriteItems();
   const old = items.find(x => x.sourceUrl === sourceUrl);
