@@ -40,6 +40,12 @@ const protectedText = "ภาษาไทยที่มองเห็นได
 const protectedResult = api.inspectTextQuality(protectedText);
 assert.equal(protectedResult.ok, false, "private-use font glyphs are rejected before analysis");
 assert.equal(protectedResult.issue, "protected-font", "protected-font issue is identified");
+const mixedProtectedText = ("เนื้อหาไทยปกติ ".repeat(8)) + "\\uE54A".repeat(8) + (" ข้อความต่อท้าย".repeat(8));
+assert.equal(api.inspectTextQuality(mixedProtectedText).ok, false, "mixed Thai and protected-font glyphs are rejected");
+assert.equal(api.inspectTextQuality(mixedProtectedText).issue, "protected-font", "mixed protected-font text gets a specific diagnosis");
+const invisibleText = ("ประโยคภาษาไทยที่อ่านได้ ".repeat(10)) + "\\u200B".repeat(24);
+assert.equal(api.inspectTextQuality(invisibleText).issue, "invisible-characters", "excessive zero-width characters are flagged");
+
 assert(api.inspectTextQuality("ต้นฉบับธรรมดาที่มีภาษาไทยและคำพูด \uFFFD").ok, "one replacement character is not over-blocked");
 const evidence = api.feelEvidence(api.SAMPLE_TEXT);
 assert(evidence.length > 0 && evidence[0].terms.length > 0, "analysis provides explicit keywords supporting a tone");
