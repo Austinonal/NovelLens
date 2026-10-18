@@ -307,8 +307,9 @@ summary::marker{color:var(--pen)}
     <section class="rw-card">
       <div class="row" style="justify-content:space-between">
         <div><span class="tag">LOCAL LIBRARY</span><h2>คลังเรื่องที่นำเข้า</h2></div>
-        <div class="row"><button id="rw-export" class="ghost" type="button">ส่งออก JSON</button><button id="rw-clear" class="ghost" type="button">ล้างคลัง</button></div>
+        <div class="row"><button id="rw-merge-selected" class="ghost" type="button">รวมรายการที่เลือก</button><button id="rw-export" class="ghost" type="button">ส่งออก JSON</button><button id="rw-clear" class="ghost" type="button">ล้างคลัง</button></div>
       </div>
+      <p class="note">เลือกหลายหน้า/หลายตอนแล้วกด “รวมรายการที่เลือก” เพื่อสร้างชุดอ่านวิเคราะห์ใหม่ รายการเดิมจะยังอยู่เหมือนเดิม</p>
       <div id="rw-stats" class="rw-stats"></div>
       <div id="rw-library" class="rw-list"></div>
     </section>
@@ -1387,16 +1388,37 @@ function saveReadAWriteImport(data) {
   }
   if (text.length < 80 || !/^https?:\/\/(?:[^/]+\.)?readawrite\.com\//i.test(sourceUrl)) return null;
   const items = readAWriteItems();
-  const old = items.find(x => x.sourceUrl === sourceUrl);
+  const old = items.find(x => x.sourceUrl === sourceUrl && x.kind !== "collection");
+  const mergedText = old ? mergeCaptureText(String(old.text || ""), text) : text;
   const item = {
     id: old?.id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 8)),
-    sourceUrl, storyUrl: String(data.storyUrl || sourceUrl), pageTitle: String(data.title || ""),
-    chapterTitle: String(data.chapterTitle || data.title || "ตอนที่ไม่ทราบชื่อ"),
-    text, chars: text.length, updatedAt: new Date().toISOString()
+    kind: "chapter",
+    sourceUrl, storyUrl: String(data.storyUrl || old?.storyUrl || sourceUrl), pageTitle: String(data.title || old?.pageTitle || ""),
+    chapterTitle: String(data.chapterTitle || data.title || old?.chapterTitle || "ตอนที่ไม่ทราบชื่อ"),
+    text: mergedText, chars: mergedText.length,
+    captureCount: (old?.captureCount || 0) + (old && mergedText === String(old.text || "") ? 0 : 1),
+    updatedAt: new Date().toISOString()
   };
   const next = old ? items.map(x => x.id === old.id ? item : x) : [item, ...items];
   try { localStorage.setItem(RW_IMPORT_KEY, JSON.stringify(next)); return item; }
   catch { const status = rwGet("rw-status"); if (status) status.textContent = "พื้นที่จัดเก็บเบราว์เซอร์เต็ม กรุณาส่งออกหรือลบตอนเก่าก่อน"; return null; }
+}
+// Append repeated captures from one source without duplicating identical text or a clear exact overlap.
+function mergeCaptureText(existing, incoming) {
+  const a=String(existing||"").trim(), b=String(incoming||"").trim();
+  if(!a) return b;
+  if(!b || a===b || a.includes(b)) return a;
+  if(b.includes(a)) return b;
+  const max=Math.min(a.length,b.length,4000);
+  for(let k=max;k>=100;k--) {
+    if(a.slice(-k)===b.slice(0,k)) return (a+"\n\n"+b.slice(k).trim()).trim();
+  }
+  return (a+"\n\n"+b).trim();
+}
+function mergeLibraryTexts(items) {
+  let merged="";
+  for(const item of items) merged=mergeCaptureText(merged,String(item.text||""));
+  return merged;
 }
 function renderReadAWriteLibrary() {
   const items = readAWriteItems(), list = rwGet("rw-library"), stats = rwGet("rw-stats");
@@ -1404,11 +1426,32 @@ function renderReadAWriteLibrary() {
   const stories = new Set(items.map(x => x.storyUrl || x.sourceUrl));
   stats.innerHTML = '<div class="rw-stat"><span>เรื่องที่พบ</span><b>' + stories.size + '</b></div><div class="rw-stat"><span>ตอนที่เก็บไว้</span><b>' + items.length + '</b></div><div class="rw-stat"><span>ตัวอักษรรวม</span><b>' + items.reduce((n,x)=>n+(x.text||"").length,0).toLocaleString() + '</b></div>';
   if (!items.length) { list.innerHTML = '<div class="rw-empty">ยังไม่มีตอนในคลัง เปิดหน้าตอน ReadAWrite แล้วกด bookmarklet “ดึงเข้าห้องแกะนิยาย” เพื่อเพิ่มตอน</div>'; return; }
-  list.innerHTML = items.map(x => '<article class="rw-item"><div><h3>' + rwEscape(x.chapterTitle) + '</h3><p>' + rwEscape(x.storyUrl) + '</p><p>' + (x.text||"").length.toLocaleString() + ' ตัวอักษร · นำเข้าล่าสุด ' + rwEscape(new Date(x.updatedAt).toLocaleString()) + '</p></div><div class="row"><button type="button" data-rw-analyze="' + rwEscape(x.id) + '">วิเคราะห์ตอน</button><button type="button" class="ghost" data-rw-open="' + rwEscape(x.id) + '">เปิดต้นทาง</button><button type="button" class="ghost" data-rw-delete="' + rwEscape(x.id) + '">ลบ</button></div></article>').join("");
-  list.querySelectorAll("[data-rw-analyze]").forEach(b => b.onclick = () => { const x = readAWriteItems().find(i => i.id === b.dataset.rwAnalyze); if (!x) return; src.value = x.text; updateCount(); isExample = false; run(); $("t-analyze").click(); $("work").scrollIntoView({behavior:"smooth"}); });
+  list.innerHTML = items.map(x => '<article class="rw-item"><div><label class="row" style="gap:8px"><input type="checkbox" data-rw-select="' + rwEscape(x.id) + '" aria-label="เลือกรายการ ' + rwEscape(x.chapterTitle) + '"><h3>' + rwEscape(x.chapterTitle) + '</h3></label><p>' + rwEscape(x.storyUrl || (x.kind === "collection" ? "ชุดรวมจากคลัง" : x.sourceUrl)) + '</p><p>' + (x.text||"").length.toLocaleString() + ' ตัวอักษร · ' + (x.kind === "collection" ? ((x.sourceIds||[]).length + ' รายการที่รวม') : ((x.captureCount || 1) + ' ครั้งที่นำเข้า')) + ' · อัปเดต ' + rwEscape(new Date(x.updatedAt).toLocaleString()) + '</p></div><div class="row"><button type="button" data-rw-analyze="' + rwEscape(x.id) + '">วิเคราะห์</button>' + (x.kind === "collection" ? '' : '<button type="button" class="ghost" data-rw-open="' + rwEscape(x.id) + '">เปิดต้นทาง</button>') + '<button type="button" class="ghost" data-rw-delete="' + rwEscape(x.id) + '">ลบ</button></div></article>').join("");
+  list.querySelectorAll("[data-rw-analyze]").forEach(b => b.onclick = () => { const x = readAWriteItems().find(i => i.id === b.dataset.rwAnalyze); if (!x) return; src.value = x.text; updateCount(); isExample = false; saveAnalysisSession(src.value); run(); $("t-analyze").click(); $("work").scrollIntoView({behavior:"smooth"}); });
   list.querySelectorAll("[data-rw-open]").forEach(b => b.onclick = () => { const x = readAWriteItems().find(i => i.id === b.dataset.rwOpen); if (x) window.open(x.sourceUrl, "_blank", "noopener"); });
   list.querySelectorAll("[data-rw-delete]").forEach(b => b.onclick = () => { const x = readAWriteItems().find(i => i.id === b.dataset.rwDelete); if (x && confirm('ลบตอน "' + x.chapterTitle + '" ออกจากคลังในเบราว์เซอร์นี้หรือไม่?')) { localStorage.setItem(RW_IMPORT_KEY, JSON.stringify(readAWriteItems().filter(i => i.id !== x.id))); renderReadAWriteLibrary(); } });
 }
+rwGet("rw-merge-selected").onclick = () => {
+  const status=rwGet("rw-status");
+  const ids=[...document.querySelectorAll("[data-rw-select]:checked")].map(x=>x.dataset.rwSelect);
+  if(ids.length<2){status.textContent="เลือกอย่างน้อย 2 รายการเพื่อรวมเป็นชุด";return;}
+  const all=readAWriteItems();
+  // Use checkboxes in their displayed order; preserve originals rather than destructively replacing them.
+  const picked=all.filter(x=>ids.includes(x.id));
+  const text=mergeLibraryTexts(picked);
+  if(!text.trim()){status.textContent="รายการที่เลือกไม่มีข้อความให้นำมารวม";return;}
+  const id="set-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,7);
+  const title=prompt("ตั้งชื่อชุดรวม", "ชุดรวม "+picked.map(x=>x.chapterTitle).slice(0,3).join(" + "));
+  if(title===null)return;
+  const collection={
+    id,kind:"collection",sourceUrl:"novellens-collection://"+id,
+    storyUrl:"",pageTitle:"ชุดรวมจากคลัง",chapterTitle:title.trim()||"ชุดรวมจากคลัง",
+    sourceIds:picked.map(x=>x.id),sourceUrls:picked.map(x=>x.sourceUrl),
+    text,chars:text.length,captureCount:1,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()
+  };
+  try{localStorage.setItem(RW_IMPORT_KEY,JSON.stringify([collection,...all]));renderReadAWriteLibrary();status.textContent="สร้างชุดรวมแล้ว รายการต้นฉบับ "+picked.length+" รายการยังอยู่ครบ";}
+  catch(_){status.textContent="บันทึกชุดรวมไม่สำเร็จ พื้นที่จัดเก็บอาจเต็ม กรุณาส่งออก JSON หรือลบรายการเก่า";}
+};
 rwGet("rw-check").onclick = () => {
   const raw = rwGet("rw-url").value.trim(), status = rwGet("rw-status");
   try {
