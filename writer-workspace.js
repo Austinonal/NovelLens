@@ -232,7 +232,7 @@
     for (const item of words) traitWeight.set(item.word,(traitWeight.get(item.word)||0)+item.weight);
     const traits = Array.from(traitWeight.entries()).sort((a,b)=>b[1]-a[1]).map(x=>x[0]).slice(0,8);
     const dominant = scored[0].c;
-    const second = scored[1].c;
+    const second = scored[1];
     const desireA = dominant.desire || dominant.want || "สิ่งที่เชื่อว่าตัวเองสมควรได้รับ";
     const desireB = second.c.desire || second.c.want || "สิ่งที่อีกฝ่ายไม่อยากสูญเสีย";
     return {
