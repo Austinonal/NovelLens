@@ -334,13 +334,13 @@ summary::marker{color:var(--pen)}
         <button id="rw-open" class="ghost" type="button">เปิด ReadAWrite</button>
       </div>
       <div class="rw-html-import">
-        <label for="rw-html-file">หรือเลือกไฟล์หน้าเว็บ HTML ที่คุณบันทึกจากหน้า ReadAWrite</label>
+        <label for="rw-html-file">หรือเลือกไฟล์หน้าเว็บ HTML/MHTML ที่คุณบันทึกจากหน้า ReadAWrite</label>
         <div class="rw-input">
-          <input id="rw-html-file" type="file" accept=".html,.htm,.xhtml,text/html,application/xhtml+xml" aria-label="เลือกไฟล์ HTML ที่บันทึกไว้">
+          <input id="rw-html-file" type="file" accept=".html,.htm,.xhtml,.mhtml,.mht,text/html,application/xhtml+xml" aria-label="เลือกไฟล์ HTML ที่บันทึกไว้">
           <label class="rw-html-rights"><input id="rw-html-rights" type="checkbox"> ฉันเป็นเจ้าของเนื้อหาหรือได้รับอนุญาตให้นำเข้า</label>
           <button id="rw-import-html" type="button">อ่านไฟล์ HTML</button>
         </div>
-        <p class="note">อ่านเฉพาะข้อความในเนื้อหา HTML ที่บันทึกไว้ ไม่ดึงข้อมูลจากเซิร์ฟเวอร์ ไม่ถอดรหัสฟอนต์พิเศษ และจะเก็บข้อความที่น่าสงสัยไว้ในสถานะ “รอตรวจ” แทนการวิเคราะห์ผิด</p>
+        <p class="note">อ่านเฉพาะข้อความใน HTML/MHTML ที่บันทึกไว้ ไม่ดึงข้อมูลจากเซิร์ฟเวอร์ ไม่ถอดรหัสฟอนต์พิเศษ และจะเก็บข้อความที่น่าสงสัยไว้ในสถานะ “รอตรวจ” แทนการวิเคราะห์ผิด</p>
       </div>
       <p class="note">ข้อจำกัดสำคัญ: เว็บที่โฮสต์บน GitHub Pages ไม่สามารถอ่านหน้า ReadAWrite ข้ามโดเมนได้เองเพราะนโยบายเบราว์เซอร์ จึงไม่สามารถไล่ทุกตอนจากลิงก์เดียวโดยอัตโนมัติในเวอร์ชันเว็บสแตติกนี้ได้ ให้เปิดแต่ละตอนแล้วกด bookmarklet เพื่อเก็บตอนลงคลัง หากเป็นเรื่องของคุณเองหรือได้รับอนุญาตให้นำเข้าเท่านั้น</p>
       <div id="rw-status" class="rw-status" role="status" aria-live="polite"></div>
@@ -700,6 +700,49 @@ function normalizeReadAWriteUrl(input){
   url.protocol="https:";
   url.hostname=url.hostname.toLowerCase();
   return url.href;
+}
+
+function extractHtmlFromMhtml(source){
+  const raw=String(source||"");
+  const boundaryMatch=raw.match(/boundary\s*=\s*(?:"([^"]+)"|'([^']+)'|([^;\r\n]+))/i);
+  if(!boundaryMatch) throw new Error("ไม่พบ MIME boundary ในไฟล์ MHTML");
+  const boundary=boundaryMatch[1]||boundaryMatch[2]||(boundaryMatch[3]||"").trim();
+  if(!boundary) throw new Error("รูปแบบ MHTML ไม่มี boundary ที่ใช้งานได้");
+  const decodeBytes=(body,encoding,charset)=>{
+    let bytes;
+    if(encoding==="base64"){
+      let binary;
+      try{binary=atob(body.replace(/\s+/g,""));}
+      catch(_){throw new Error("ส่วน HTML ใน MHTML มีข้อมูล Base64 เสียหาย");}
+      bytes=new Uint8Array(binary.length);
+      for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+    }else if(encoding==="quoted-printable"){
+      const value=body.replace(/=\r?\n/g,""),buffer=[];
+      for(let i=0;i<value.length;){
+        if(value[i]==="="&&/^[0-9A-Fa-f]{2}$/.test(value.slice(i+1,i+3))){buffer.push(parseInt(value.slice(i+1,i+3),16));i+=3;continue;}
+        const code=value.charCodeAt(i++);
+        if(code<=255)buffer.push(code);
+        else for(const b of new TextEncoder().encode(value[i-1]))buffer.push(b);
+      }
+      bytes=Uint8Array.from(buffer);
+    }else{
+      return body;
+    }
+    try{return new TextDecoder(charset||"utf-8").decode(bytes);}
+    catch(_){return new TextDecoder("utf-8").decode(bytes);}
+  };
+  for(const part of raw.split("--"+boundary)){
+    const marker=/\r?\n\r?\n/.exec(part);
+    if(!marker)continue;
+    const headers=part.slice(0,marker.index),body=part.slice(marker.index+marker[0].length).replace(/\r?\n--\s*$/,"").trim();
+    if(!/content-type\s*:\s*text\/html\b/i.test(headers))continue;
+    const encoding=(headers.match(/content-transfer-encoding\s*:\s*([^\r\n;]+)/i)||[])[1]?.trim().toLowerCase()||"";
+    const charset=(headers.match(/content-type\s*:[^\r\n]*charset\s*=\s*["']?([^;"'\s\r\n]+)/i)||[])[1]||"utf-8";
+    const location=(headers.match(/content-location\s*:\s*([^\r\n]+)/i)||[])[1]?.trim()||"";
+    const decoded=decodeBytes(body,encoding,charset);
+    if(/<html[\s>]|<!doctype\s+html/i.test(decoded))return {html:decoded,contentLocation:location,encoding,charset};
+  }
+  throw new Error("ไม่พบส่วน text/html ในไฟล์ MHTML นี้");
 }
 
 // ===== UI =====
@@ -1840,15 +1883,18 @@ rwGet("rw-import-html").onclick = async () => {
   const file=rwGet("rw-html-file").files?.[0], status=rwGet("rw-status");
   if(!file){status.textContent="เลือกไฟล์ HTML ที่บันทึกไว้ก่อน";return;}
   if(!rwGet("rw-html-rights").checked){status.textContent="กรุณายืนยันสิทธิ์ในการนำเข้าเนื้อหาก่อน";return;}
-  if(file.size>10*1024*1024){status.textContent="ไฟล์ HTML ใหญ่กว่า 10 MB ยังไม่รองรับ เพื่อป้องกันเบราว์เซอร์ค้าง";return;}
+  if(file.size>20*1024*1024){status.textContent="ไฟล์ HTML/MHTML ใหญ่กว่า 20 MB ยังไม่รองรับ เพื่อป้องกันเบราว์เซอร์ค้าง";return;}
   try{
     status.textContent="กำลังอ่านไฟล์ HTML ในเบราว์เซอร์…";
     const source=await file.text();
-    const result=extractSavedReadAWriteHtml(source);
+    const savedPage=/\.mht(?:ml)?$/i.test(file.name)
+      ? extractHtmlFromMhtml(source)
+      : {html:source,contentLocation:""};
+    const result=extractSavedReadAWriteHtml(savedPage.html);
     const text=String(result.text||"").trim();
     if(text.length<80)throw new Error("ไม่พบเนื้อความที่อ่านได้อย่างน้อย 80 ตัวอักษรในไฟล์นี้");
     let sourceUrl="";
-    const rawCandidates=[result.canonical,rwGet("rw-url").value,...result.links.map(x=>x.href)];
+    const rawCandidates=[result.canonical,savedPage.contentLocation,rwGet("rw-url").value,...result.links.map(x=>x.href)];
     for(const raw of rawCandidates){
       if(!raw)continue;
       try{
