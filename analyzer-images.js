@@ -19,7 +19,7 @@
   function revoke(item){ if(item && item.url) URL.revokeObjectURL(item.url); }
   function draw(item){
     const c=item.canvas,im=item.image;
-    const scale=Math.min(1,1200/im.naturalWidth,2400/im.naturalHeight);
+    const scale=Math.min(1,1600/im.naturalWidth,6500/im.naturalHeight,Math.sqrt(5000000/(im.naturalWidth*im.naturalHeight)));
     c.width=Math.max(1,Math.round(im.naturalWidth*scale));
     c.height=Math.max(1,Math.round(im.naturalHeight*scale));
     const ctx=c.getContext("2d",{alpha:false});
@@ -126,5 +126,193 @@
     document.getElementById("t-analyze")?.click();document.getElementById("work")?.scrollIntoView({behavior:"smooth"});
     say("เพิ่มภาพจากคลังเข้าหน้าแกะนิยายแล้ว — ครอปเพิ่มหรือดาวน์โหลดได้");
   });
-  render();
+
+  // In-browser OCR for image files the user owns or is authorized to process.
+  const ocrButton = document.getElementById("analyzer-image-ocr");
+  const ocrOutput = document.getElementById("analyzer-image-output");
+  const ocrRights = document.getElementById("analyzer-image-rights");
+  const ocrLanguage = document.getElementById("analyzer-image-language");
+  const ocrProgressWrap = document.getElementById("analyzer-image-progress");
+  const ocrProgress = ocrProgressWrap && ocrProgressWrap.querySelector("i");
+  const ocrDraftKey = "novellens.image-ocr.draft.v1";
+  let ocrWorker = null;
+  let ocrWorkerLanguage = "";
+  let ocrLibraryPromise = null;
+  let ocrBusy = false;
+
+  try {
+    const oldDraft = localStorage.getItem(ocrDraftKey);
+    if (oldDraft && ocrOutput && !ocrOutput.value) ocrOutput.value = oldDraft;
+  } catch (_) {}
+  if (ocrOutput) ocrOutput.addEventListener("input", () => {
+    try {
+      if (ocrOutput.value) localStorage.setItem(ocrDraftKey, ocrOutput.value);
+      else localStorage.removeItem(ocrDraftKey);
+    } catch (_) {}
+  });
+
+  async function loadTesseract() {
+    if (window.Tesseract && window.Tesseract.createWorker) return window.Tesseract;
+    if (!ocrLibraryPromise) {
+      ocrLibraryPromise = new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+        script.async = true;
+        script.onload = () => {
+          if (window.Tesseract && window.Tesseract.createWorker) resolve(window.Tesseract);
+          else reject(new Error("โหลดตัว OCR แล้วแต่ไม่พบเครื่องมือ"));
+        };
+        script.onerror = () => {
+          ocrLibraryPromise = null;
+          reject(new Error("โหลด OCR ไม่สำเร็จ โปรดตรวจอินเทอร์เน็ตแล้วลองอีกครั้ง"));
+        };
+        document.head.append(script);
+      });
+    }
+    return ocrLibraryPromise;
+  }
+
+  function makeOcrCanvas(item) {
+    const image = item.image, preview = item.canvas, crop = item.crop;
+    let sx = 0, sy = 0, sw = image.naturalWidth, sh = image.naturalHeight;
+    if (crop) {
+      const scaleX = image.naturalWidth / preview.width;
+      const scaleY = image.naturalHeight / preview.height;
+      sx = Math.round(crop.x * scaleX);
+      sy = Math.round(crop.y * scaleY);
+      sw = Math.round(crop.w * scaleX);
+      sh = Math.round(crop.h * scaleY);
+      sx = clamp(sx, 0, image.naturalWidth - 1);
+      sy = clamp(sy, 0, image.naturalHeight - 1);
+      sw = clamp(sw, 1, image.naturalWidth - sx);
+      sh = clamp(sh, 1, image.naturalHeight - sy);
+    }
+    const scale = Math.min(3, Math.sqrt(14000000 / Math.max(1, sw * sh)));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(sw * scale));
+    canvas.height = Math.max(1, Math.round(sh * scale));
+    const context = canvas.getContext("2d", { alpha: false });
+    if (!context) throw new Error("เตรียมภาพสำหรับ OCR ไม่สำเร็จ");
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.filter = "grayscale(1) contrast(1.18)";
+    context.drawImage(image, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    context.filter = "none";
+    return canvas;
+  }
+
+  function mergeOcrSegments(parts) {
+    let merged = "";
+    for (const segment of parts) {
+      const next = String(segment || "").trim();
+      if (!next) continue;
+      if (!merged) { merged = next; continue; }
+      if (merged === next || merged.includes(next)) continue;
+      if (next.includes(merged)) { merged = next; continue; }
+      let overlap = 0;
+      const max = Math.min(merged.length, next.length, 2500);
+      for (let length = max; length >= 40; length--) {
+        if (merged.slice(-length) === next.slice(0, length)) { overlap = length; break; }
+      }
+      merged += "\n\n" + next.slice(overlap).trim();
+    }
+    return merged.trim();
+  }
+
+  if (ocrButton) ocrButton.addEventListener("click", async () => {
+    if (ocrBusy) return;
+    if (!ocrRights || !ocrRights.checked) {
+      say("โปรดยืนยันว่าคุณเป็นเจ้าของภาพ/ข้อความหรือได้รับอนุญาตให้แปลงเป็นข้อความก่อน");
+      return;
+    }
+    if (!items.length) { say("อัปโหลดภาพอย่างน้อยหนึ่งภาพก่อน"); return; }
+    const uncropped = items.filter(item => !item.crop || item.crop.w < 8 || item.crop.h < 8);
+    if (uncropped.length) {
+      say("กรุณาลากกรอบครอปทุกภาพก่อน OCR เพื่อเลือกเฉพาะเนื้อหาที่ต้องการ (" + uncropped.length + " ภาพยังไม่มีกรอบ)");
+      return;
+    }
+
+    ocrBusy = true;
+    ocrButton.disabled = true;
+    if (ocrProgressWrap) ocrProgressWrap.hidden = false;
+    if (ocrProgress) ocrProgress.style.width = "0%";
+    let buttonLabel = ocrButton.textContent;
+    ocrButton.textContent = "กำลังอ่านข้อความ…";
+    const language = ocrLanguage ? ocrLanguage.value : "tha";
+    try {
+      const api = await loadTesseract();
+      if (!ocrWorker || ocrWorkerLanguage !== language) {
+        if (ocrWorker) { await ocrWorker.terminate(); ocrWorker = null; }
+        say("กำลังเตรียม OCR ภาษา " + (language === "tha+eng" ? "ไทย + English" : "ไทย") + " — ครั้งแรกจะดาวน์โหลดตัวอ่านและข้อมูลภาษา");
+        ocrWorker = await api.createWorker(language, 1, {
+          logger: message => {
+            if (message.status === "recognizing text") {
+              const percent = Math.round((message.progress || 0) * 100);
+              if (ocrProgress) ocrProgress.style.width = percent + "%";
+              say("กำลังอ่านข้อความจากภาพ · " + percent + "%");
+            }
+          }
+        });
+        ocrWorkerLanguage = language;
+      }
+
+      const recognizedSegments = [];
+      let confidenceTotal = 0, confidenceCount = 0;
+      for (let index = 0; index < items.length; index++) {
+        const item = items[index];
+        say("กำลังอ่านภาพ " + (index + 1) + "/" + items.length + " · " + item.name);
+        const canvas = makeOcrCanvas(item);
+        try {
+          const result = await ocrWorker.recognize(canvas);
+          const text = String(result && result.data && result.data.text || "").trim();
+          if (text) recognizedSegments.push(text);
+          const confidence = Number(result && result.data && result.data.confidence);
+          if (Number.isFinite(confidence)) { confidenceTotal += confidence; confidenceCount++; }
+        } finally {
+          canvas.width = 0;
+          canvas.height = 0;
+        }
+        if (ocrProgress) ocrProgress.style.width = Math.round((index + 1) / items.length * 100) + "%";
+      }
+      const text = mergeOcrSegments(recognizedSegments);
+      if (!text) throw new Error("ไม่พบข้อความที่อ่านได้ ลองครอปให้เหลือเฉพาะตัวอักษรหรือใช้ภาพที่คมชัดกว่า");
+      ocrOutput.value = text;
+      ocrOutput.dispatchEvent(new Event("input", { bubbles: true }));
+      const confidenceAverage = confidenceCount ? Math.round(confidenceTotal / confidenceCount) : null;
+      say("OCR เสร็จแล้ว " + items.length + " ภาพ · " + text.length.toLocaleString() + " ตัวอักษร" +
+        (confidenceAverage !== null ? " · ความมั่นใจเฉลี่ย " + confidenceAverage + "%" : "") +
+        " — ตรวจแก้ข้อความด้านล่างก่อนส่งไปวิเคราะห์");
+      if (ocrProgress) ocrProgress.style.width = "100%";
+    } catch (error) {
+      say("OCR ไม่สำเร็จ: " + String(error && error.message || error));
+    } finally {
+      ocrBusy = false;
+      ocrButton.disabled = false;
+      ocrButton.textContent = buttonLabel;
+      if (ocrProgressWrap) ocrProgressWrap.hidden = true;
+    }
+  });
+
+  function sendOcrToAnalyzer(append) {
+    if (!ocrRights || !ocrRights.checked) {
+      say("โปรดยืนยันสิทธิ์ในการนำภาพมาแปลงเป็นข้อความก่อน");
+      return;
+    }
+    const text = String(ocrOutput && ocrOutput.value || "").trim();
+    if (!text) { say("ยังไม่มีข้อความ OCR ให้ส่งไปวิเคราะห์"); return; }
+    const source = document.getElementById("src");
+    if (!source) { say("ไม่พบช่องต้นฉบับของตัววิเคราะห์"); return; }
+    source.value = append && source.value.trim()
+      ? source.value.trim() + "\n\n" + text
+      : text;
+    source.dispatchEvent(new Event("input", { bubbles: true }));
+    const analyzeButton = document.getElementById("go");
+    if (analyzeButton) analyzeButton.click();
+    say("ส่งข้อความ OCR ไปยังตัววิเคราะห์แล้ว ตรวจผลสรุปและแก้ข้อความได้ตามต้องการ");
+    document.getElementById("work")?.scrollIntoView({ behavior: "smooth" });
+  }
+  document.getElementById("analyzer-image-analyze")?.addEventListener("click", () => sendOcrToAnalyzer(false));
+  document.getElementById("analyzer-image-append")?.addEventListener("click", () => sendOcrToAnalyzer(true));
+
+    render();
 })();
