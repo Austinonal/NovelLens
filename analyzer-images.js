@@ -71,12 +71,14 @@
       const up=make("button",{type:"button",class:"ghost sm",disabled:index===0},"↑ ขึ้น");
       const down=make("button",{type:"button",class:"ghost sm",disabled:index===pending.length-1},"↓ ลง");
       const reset=make("button",{type:"button",class:"ghost sm"},"รีเซ็ตกรอบ");
+      const full=make("button",{type:"button",class:"ghost sm"},"เลือกภาพเต็ม");
       const save=make("button",{type:"button",class:"sm"},"ครอปและบันทึกเข้าคลังภาพ");
       const saveDownload=make("button",{type:"button",class:"ghost sm"},"ดาวน์โหลดภาพครอป");
       const remove=make("button",{type:"button",class:"ghost sm"},"เอาออก");
       up.onclick=()=>{if(index>0){[pending[index-1],pending[index]]=[pending[index],pending[index-1]];render();}};
       down.onclick=()=>{if(index<pending.length-1){[pending[index+1],pending[index]]=[pending[index],pending[index+1]];render();}};
-      reset.onclick=()=>{item.crop=null;overlay(item);say("รีเซ็ตกรอบแล้ว จะใช้ภาพเต็ม");};
+      reset.onclick=()=>{item.crop=null;overlay(item);say("ล้างกรอบแล้ว — ก่อน OCR ให้ลากครอปหรือกด “เลือกภาพเต็ม”");};
+      full.onclick=()=>{item.crop={x:0,y:0,w:item.canvas.width,h:item.canvas.height};overlay(item);say("เลือกภาพเต็มแล้วสำหรับ "+item.name);};
       remove.onclick=()=>{revoke(item);pending=pending.filter(x=>x.id!==item.id);render();say("นำภาพออกจากคิวแล้ว");};
       save.onclick=async()=>{
         if(!window.NovelLensImageWorkspace){say("ส่วนคลังภาพยังโหลดไม่เสร็จ กรุณารีเฟรชหน้าแล้วลองอีกครั้ง");return;}
@@ -96,7 +98,7 @@
         make("div",{class:"analyzer-image-cardhead"},make("strong",{},(index+1)+". "+item.name),make("span",{class:"analyzer-image-small"},item.image.naturalWidth+" × "+item.image.naturalHeight+" px")),
         low?make("p",{class:"analyzer-image-small",style:"color:var(--pen)"},"ภาพแคบมาก ข้อความเล็กอาจไม่ชัด แม้ครอปแล้วก็ตาม"):null,
         make("p",{class:"analyzer-image-small"},item.crop?"เลือกกรอบครอปแล้ว":"ลากเมาส์บนภาพเพื่อครอปก่อนบันทึก"),
-        viewport,make("div",{class:"analyzer-image-tools"},up,down,reset,save,saveDownload,remove)));
+        viewport,make("div",{class:"analyzer-image-tools"},up,down,reset,full,save,saveDownload,remove)));
       overlay(item);
     });
   }
