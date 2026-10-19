@@ -366,6 +366,12 @@
           img.onload = () => URL.revokeObjectURL(url);
           const download = el("button", { type: "button", class: "ghost sm" }, "ดาวน์โหลด PNG");
           download.onclick = () => downloadBlob(item.blob, item.title.replace(/[\\/:*?"<>|]/g, "_") + ".png");
+          const cropMore = el("button", { type: "button", class: "ghost sm" }, "ครอปเพิ่มในหน้าแกะนิยาย");
+          cropMore.onclick = () => {
+            window.dispatchEvent(new CustomEvent("novellens:add-image-to-analyzer", {detail:{blob:item.blob,name:item.title+".png"}}));
+            const tab = document.getElementById("t-analyze");
+            if (tab) tab.click();
+          };
           const del = el("button", { type: "button", class: "ghost sm" }, "ลบ");
           del.onclick = async () => {
             if (!confirm("ลบภาพ " + item.title + " ออกจากคลังภาพหรือไม่?")) return;
@@ -381,7 +387,7 @@
                 el("p", {}, "บันทึก " + new Date(item.createdAt).toLocaleString())
               )
             ),
-            el("div", { class: "rw-img-tools" }, download, del)
+            el("div", { class: "rw-img-tools" }, cropMore, download, del)
           ));
         } else {
           const gallery = el("div", { class: "rw-img-gallery" });
@@ -466,6 +472,24 @@
       say("สร้างชุดภาพแล้ว " + record.imageIds.length + " ภาพ · ภาพเดิมยังอยู่ในคลัง");
     } catch (error) {
       say("สร้างชุดภาพไม่สำเร็จ: " + String(error && error.message || error));
+    }
+  });
+
+  window.NovelLensImageWorkspace = Object.freeze({
+    async saveImage({blob,title,sourceName,width,height}) {
+      if (!(blob instanceof Blob) || !String(blob.type||"").startsWith("image/")) throw new Error("ไฟล์ที่ส่งเข้าคลังไม่ใช่ภาพ");
+      const record = {
+        id: "img-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2,7),
+        kind: "image",
+        title: String(title||"ภาพครอป"),
+        sourceName: String(sourceName||"ภาพจากหน้าแกะนิยาย"),
+        blob, width: Number(width)||0, height: Number(height)||0,
+        createdAt: new Date().toISOString()
+      };
+      await putRecord(record);
+      await renderLibrary();
+      say("บันทึกภาพครอปเข้าคลังภาพแล้ว");
+      return record.id;
     }
   });
 
