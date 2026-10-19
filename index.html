@@ -942,6 +942,7 @@ addEventListener("message", e => {
       selectedChars: Number(e.data.selectionLength || 0),
       capturedChars: Number(e.data.capturedLength || src.value.length),
       privateUseCount: Number(e.data.privateUseCount || quality.pua || 0),
+      privateUseRatio: Number(quality.puaRatio || 0),
       sourceFont: String(e.data.sourceFont || "").slice(0, 120)
     }
   });
@@ -964,7 +965,12 @@ addEventListener("message", e => {
     : "วิเคราะห์แล้ว แต่บันทึกเข้าคลังไม่สำเร็จ ตรวจ URL และพื้นที่จัดเก็บ";
   if (typeof renderReadAWriteLibrary === "function") renderReadAWriteLibrary();
 });
-if (window.opener) window.opener.postMessage("novel-ready", "*");
+if (window.opener) {
+  const notifyNovelReady = () => { try { if (window.opener) window.opener.postMessage("novel-ready", "*"); } catch (_) {} };
+  notifyNovelReady();
+  setTimeout(notifyNovelReady, 300);
+  setTimeout(notifyNovelReady, 900);
+}
 
 const savedAnalysisSession = restoreAnalysisSession();
 if (savedAnalysisSession) { src.value = savedAnalysisSession.text; isExample = false; status.textContent = "กู้คืนข้อความวิเคราะห์จากการใช้งานครั้งก่อนแล้ว"; }
@@ -1593,6 +1599,7 @@ function saveReadAWriteImport(data) {
     selectedChars: Math.max(0,Number(rawDiag.selectedChars || data.selectionLength || 0)),
     capturedChars: Math.max(0,Number(rawDiag.capturedChars || data.capturedLength || text.length)),
     privateUseCount: Math.max(0,Number(rawDiag.privateUseCount || data.privateUseCount || quality.pua || 0)),
+    privateUseRatio: Math.max(0,Math.min(1,Number(rawDiag.privateUseRatio || quality.puaRatio || 0))),
     sourceFont: String(rawDiag.sourceFont || data.sourceFont || "").slice(0,120)
   };
   const item = {
@@ -1646,7 +1653,8 @@ function renderReadAWriteLibrary() {
     const capture = x.captureDiagnostics ? '<p class="note">วิธีนำเข้า: ' + rwEscape(x.captureDiagnostics.method || "bookmarklet") +
       (x.captureDiagnostics.selector ? ' · พื้นที่: ' + rwEscape(x.captureDiagnostics.selector) : '') +
       (x.captureDiagnostics.capturedChars ? ' · ตรวจพบ ' + Number(x.captureDiagnostics.capturedChars).toLocaleString() + ' ตัวอักษร' : '') +
-      (x.captureDiagnostics.privateUseCount ? ' · อักขระพิเศษ ' + Number(x.captureDiagnostics.privateUseCount).toLocaleString() : '') + '</p>' : '';
+      (x.captureDiagnostics.privateUseCount ? ' · อักขระพิเศษ ' + Number(x.captureDiagnostics.privateUseCount).toLocaleString() : '') +
+      (x.captureDiagnostics.privateUseRatio ? ' · PUA ' + (Number(x.captureDiagnostics.privateUseRatio) * 100).toFixed(1) + '%' : '') + '</p>' : '';
     const analyzeButton = isReview
       ? '<button type="button" class="ghost" data-rw-review="' + rwEscape(x.id) + '">ตรวจปัญหาข้อความ</button>'
       : '<button type="button" data-rw-analyze="' + rwEscape(x.id) + '">วิเคราะห์</button>';
