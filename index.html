@@ -193,7 +193,7 @@ summary::marker{color:var(--pen)}
 .rw-input{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
 .rw-input input{flex:1;min-width:min(100%,260px);padding:11px 12px;border:1px solid var(--rule2);border-radius:7px;background:var(--desk);color:var(--ink);font:inherit}
 .rw-status{min-height:1.5em;color:var(--pen);font-size:14px}
-.rw-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.rw-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .rw-stat{background:var(--desk);border:1px solid var(--rule);padding:12px;border-radius:5px}
 .rw-stat b{display:block;font-family:var(--serif);font-size:24px}
 .rw-list{display:grid;gap:10px;margin-top:14px}
@@ -201,7 +201,7 @@ summary::marker{color:var(--pen)}
 .rw-item h3{margin:0;font-family:var(--serif);font-size:17px;overflow-wrap:anywhere}
 .rw-item p{margin:3px 0;color:var(--pencil);font-size:13px;overflow-wrap:anywhere}
 .rw-empty{border:1px dashed var(--rule2);padding:22px;text-align:center;color:var(--pencil)}
-@media(max-width:620px){.rw-stats{grid-template-columns:1fr}.rw-item{grid-template-columns:1fr}.rw-item .row{justify-content:flex-start}}
+@media(max-width:900px){.rw-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}\n.rw-review-flag{color:var(--pen)!important;font-weight:700}\n.rw-json-import{display:inline-flex;align-items:center;border:1px solid var(--rule2);padding:7px 12px;border-radius:7px;cursor:pointer;font-size:14px}\n#rw-import-json{max-width:210px;min-width:160px;font-size:12px;color:var(--pencil)}\n@media(max-width:620px){.rw-stats{grid-template-columns:1fr}.rw-item{grid-template-columns:1fr}.rw-item .row{justify-content:flex-start}}
 
 </style>
   <link rel="stylesheet" href="./image-workspace.css">
@@ -350,7 +350,7 @@ summary::marker{color:var(--pen)}
     <section class="rw-card">
       <div class="row" style="justify-content:space-between">
         <div><span class="tag">LOCAL LIBRARY</span><h2>คลังข้อความที่นำเข้า</h2></div>
-        <div class="row"><button id="rw-merge-selected" class="ghost" type="button">รวมรายการที่เลือก</button><button id="rw-export" class="ghost" type="button">ส่งออก JSON</button><button id="rw-clear" class="ghost" type="button">ล้างคลัง</button></div>
+        <div class="row"><button id="rw-merge-selected" class="ghost" type="button">รวมรายการที่เลือก</button><button id="rw-export" class="ghost" type="button">ส่งออก JSON</button><label class="rw-json-import" for="rw-import-json">นำเข้า JSON</label><input id="rw-import-json" type="file" accept=".json,application/json" aria-label="นำเข้าข้อมูลสำรอง NovelLens JSON"><button id="rw-clear" class="ghost" type="button">ล้างคลัง</button></div>
       </div>
       <p class="note">เลือกหลายหน้า/หลายตอนตามลำดับที่ต้องการรวม (เลือกหน้าต้นก่อน แล้วหน้าถัดไป) จากนั้นกด “รวมรายการที่เลือก” รายการเดิมจะยังอยู่เหมือนเดิม</p>
       <div id="rw-stats" class="rw-stats"></div>
@@ -1678,6 +1678,66 @@ rwGet("rw-export").onclick = () => {
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "novellens-readawrite-library.json"; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 };
 rwGet("rw-clear").onclick = () => { if (readAWriteItems().length && confirm("ลบตอนทั้งหมดจากคลังในเบราว์เซอร์นี้หรือไม่? แนะนำให้ส่งออก JSON ก่อน")) { localStorage.removeItem(RW_IMPORT_KEY); renderReadAWriteLibrary(); rwGet("rw-status").textContent = "ล้างคลังแล้ว"; } };
+rwGet("rw-import-json").addEventListener("change", async e => {
+  const file = e.target.files?.[0]; e.target.value = "";
+  const status = rwGet("rw-status");
+  if (!file) return;
+  if (file.size > 10 * 1024 * 1024) { status.textContent = "ไฟล์ JSON ใหญ่กว่า 10 MB กรุณาแยกไฟล์ก่อนนำเข้า"; return; }
+  try {
+    const payload = JSON.parse(await file.text());
+    const incoming = Array.isArray(payload) ? payload : payload && Array.isArray(payload.items) ? payload.items : null;
+    if (!incoming) throw new Error("ไม่พบรายการ items ในไฟล์สำรอง");
+    if (incoming.length > 500) throw new Error("ไฟล์มีมากกว่า 500 รายการ กรุณาแยกไฟล์");
+    const current = readAWriteItems(), next = [...current];
+    let imported = 0, merged = 0, quarantined = 0, skipped = 0;
+    for (const raw of incoming) {
+      if (!raw || typeof raw !== "object" || typeof raw.text !== "string") { skipped++; continue; }
+      const text = raw.text.trim();
+      if (text.length < 1 || text.length > 2 * 1024 * 1024) { skipped++; continue; }
+      const kind = raw.kind === "collection" ? "collection" : "chapter";
+      const sourceUrl = String(raw.sourceUrl || "");
+      const validCollection = kind === "collection" && /^novellens-collection:\/\//.test(sourceUrl);
+      const validChapter = kind === "chapter" && /^https?:\/\/(?:[^/]+\.)?readawrite\.com\//i.test(sourceUrl);
+      if (!validCollection && !validChapter) { skipped++; continue; }
+      const quality = inspectTextQuality(text);
+      const reviewOnly = Boolean(raw.reviewOnly || !quality.ok);
+      const old = next.find(x => x.sourceUrl === sourceUrl && x.kind === kind && Boolean(x.reviewOnly) === reviewOnly);
+      const mergedText = old ? mergeCaptureText(String(old.text || ""), text) : text;
+      const item = {
+        id: old?.id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 8)),
+        kind, reviewOnly,
+        qualityIssue: reviewOnly ? String(raw.qualityIssue || quality.issue || "needs-review").slice(0,80) : "",
+        sourceUrl,
+        storyUrl: String(raw.storyUrl || (kind === "collection" ? "" : sourceUrl)).slice(0,2000),
+        pageTitle: String(raw.pageTitle || "").slice(0,300),
+        chapterTitle: String(raw.chapterTitle || raw.pageTitle || (kind === "collection" ? "ชุดรวมจากคลัง" : "ตอนที่ไม่ทราบชื่อ")).slice(0,300),
+        sourceIds: Array.isArray(raw.sourceIds) ? raw.sourceIds.map(x=>String(x).slice(0,100)).slice(0,500) : [],
+        sourceUrls: Array.isArray(raw.sourceUrls) ? raw.sourceUrls.map(x=>String(x).slice(0,2000)).slice(0,500) : [],
+        text: mergedText, chars: mergedText.length,
+        captureCount: Math.max(1, Number(old?.captureCount || raw.captureCount || 1)),
+        captureDiagnostics: raw.captureDiagnostics && typeof raw.captureDiagnostics === "object" ? {
+          method: String(raw.captureDiagnostics.method || "JSON backup").slice(0,80),
+          selector: String(raw.captureDiagnostics.selector || "").slice(0,180),
+          selectedChars: Math.max(0,Number(raw.captureDiagnostics.selectedChars || 0)),
+          capturedChars: Math.max(0,Number(raw.captureDiagnostics.capturedChars || text.length)),
+          privateUseCount: Math.max(0,Number(raw.captureDiagnostics.privateUseCount || quality.pua || 0)),
+          sourceFont: String(raw.captureDiagnostics.sourceFont || "").slice(0,120)
+        } : {method:"JSON backup",selector:"",selectedChars:0,capturedChars:text.length,privateUseCount:quality.pua,sourceFont:""},
+        updatedAt: new Date().toISOString()
+      };
+      if (old) { const i=next.findIndex(x=>x.id===old.id); next[i]=item; merged++; }
+      else { next.unshift(item); imported++; }
+      if (reviewOnly) quarantined++;
+    }
+    if (!imported && !merged) throw new Error("ไม่พบรายการที่รองรับในไฟล์นี้");
+    localStorage.setItem(RW_IMPORT_KEY, JSON.stringify(next));
+    renderReadAWriteLibrary();
+    status.textContent = "นำเข้าเสร็จ: เพิ่ม " + imported + " · รวมเข้ารายการเดิม " + merged + " · เก็บรอตรวจ " + quarantined + " · ข้ามรายการ " + skipped + " รายการ";
+  } catch (error) {
+    status.textContent = "นำเข้า JSON ไม่สำเร็จ: " + String(error && error.message || error);
+  }
+});
+
 renderReadAWriteLibrary();
 
 for (const [tab, panel] of [["t-analyze", "p-analyze"], ["t-studio", "p-studio"], ["t-import", "p-import"]]) $(tab).onclick = () => {
