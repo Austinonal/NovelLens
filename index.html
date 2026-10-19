@@ -838,39 +838,95 @@ $("file-import").addEventListener("change", async e => {
 });
 
 // --- Receive chapter text from the bookmarklet ---
-const BOOKMARKLET = app => `javascript:(()=>{const APP=${JSON.stringify(app)};
-const clean=s=>String(s||"").replace(/\u00a0/g," ").replace(/\r\n?/g,"\n").replace(/[ \t]+\n/g,"\n").replace(/\n{3,}/g,"\n\n").trim();
-const visible=el=>{if(!el||!el.isConnected)return false;const s=getComputedStyle(el);return s.display!=="none"&&s.visibility!=="hidden"&&Number(s.opacity||1)>0&&el.getClientRects().length>0;};
-const ignored=el=>el.matches("script,style,noscript,template,svg,nav,footer,aside,button,input,textarea,select,option,[hidden],[aria-hidden='true'],[role='navigation'],[role='button'],[contenteditable='true'],[class*='comment'],[id*='comment'],[class*='recommend'],[class*='related'],[class*='toolbar']");
-const visibleText=root=>{const out=[];const blockTags=/^(ADDRESS|ARTICLE|BLOCKQUOTE|DIV|DL|DT|DD|FIGCAPTION|H[1-6]|LI|MAIN|P|PRE|SECTION|TR)$/;const walk=node=>{if(node.nodeType===Node.TEXT_NODE){out.push(node.nodeValue||"");return;}if(node.nodeType!==Node.ELEMENT_NODE)return;const el=node;if(ignored(el)||!visible(el))return;if(blockTags.test(el.tagName))out.push("\n");for(const child of el.childNodes)walk(child);if(blockTags.test(el.tagName))out.push("\n");};walk(root);return clean(out.join(""));};
-const selection=clean(String(getSelection()||""));let text="",method="",chosenSelector="";
-if(selection.length>=200){text=selection;method="selected-text";chosenSelector="browser-selection";}
-if(!text){
- const selectors=["article","main","[role='main']","[class*='chapter-content']","[class*='chapter_content']","[class*='reader-content']","[class*='reader_content']","[class*='novel-content']","[id*='chapter']","[id*='reader']","[class*='content']","[id*='content']"];
- const roots=new Map();
- for(const selector of selectors){try{for(const el of document.querySelectorAll(selector)){if(!visible(el)||roots.has(el))continue;let priority=0;if(el.matches("article"))priority+=900;if(el.matches("main,[role='main']"))priority+=250;if(/chapter|reader|novel/i.test((el.id||"")+" "+(el.className||"")))priority+=700;if(/content/i.test((el.id||"")+" "+(el.className||"")))priority+=200;roots.set(el,{selector,priority});}}catch(_){}}
- const paragraphs=[...document.querySelectorAll("p")].filter(p=>visible(p)&&clean(p.innerText||p.textContent).length>=20);
- const groups=new Map();
- for(const p of paragraphs){const root=p.closest("article,main,[role='main'],[class*='chapter-content'],[class*='reader-content'],[class*='content']")||p.parentElement;if(root&&visible(root)){if(!groups.has(root))groups.set(root,[]);groups.get(root).push(clean(p.innerText||p.textContent));}}
- for(const [root,lines] of groups){if(!roots.has(root))roots.set(root,{selector:"visible-paragraph-group",priority:350,override:lines.join("\n")});}
- const candidates=[];
- for(const [root,meta] of roots){let candidate=clean(meta.override||visibleText(root));if(candidate.length<80||candidate.length>250000)continue;const useful=(candidate.match(/[\p{L}\p{M}\p{N}]/gu)||[]).length/(candidate.length||1);if(useful<0.45)continue;const lines=candidate.split("\n").filter(x=>x.trim());const repeated=lines.length-new Set(lines).size;const score=candidate.length+meta.priority-repeated*35;candidates.push({candidate,selector:meta.selector,score});}
- candidates.sort((a,b)=>b.score-a.score);
- const best=candidates[0];
- if(best){text=best.candidate;method="visible-page-text";chosenSelector=best.selector;}
+function captureReadAWritePage(APP) {
+  const clean = s => String(s || "").replace(/\u00a0/g, " ").replace(/\r\n?/g, "\n").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  const visible = el => {
+    if (!el || !el.isConnected) return false;
+    const style = getComputedStyle(el);
+    return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity || 1) > 0 && el.getClientRects().length > 0;
+  };
+  const ignored = el => el.matches("script,style,noscript,template,svg,nav,footer,aside,button,input,textarea,select,option,[hidden],[aria-hidden='true'],[role='navigation'],[role='button'],[contenteditable='true'],[class*='comment'],[id*='comment'],[class*='recommend'],[class*='related'],[class*='toolbar']");
+  const visibleText = root => {
+    const out = [];
+    const blockTags = /^(ADDRESS|ARTICLE|BLOCKQUOTE|DIV|DL|DT|DD|FIGCAPTION|H[1-6]|LI|MAIN|P|PRE|SECTION|TR)$/;
+    const walk = node => {
+      if (node.nodeType === Node.TEXT_NODE) { out.push(node.nodeValue || ""); return; }
+      if (node.nodeType !== Node.ELEMENT_NODE) return;
+      const el = node;
+      if (ignored(el) || !visible(el)) return;
+      if (blockTags.test(el.tagName)) out.push("\n");
+      for (const child of el.childNodes) walk(child);
+      if (blockTags.test(el.tagName)) out.push("\n");
+    };
+    walk(root);
+    return clean(out.join(""));
+  };
+  const selection = clean(String(getSelection() || ""));
+  let text = "", method = "", chosenSelector = "";
+  if (selection.length >= 200) { text = selection; method = "selected-text"; chosenSelector = "browser-selection"; }
+  if (!text) {
+    const selectors = ["article","main","[role='main']","[class*='chapter-content']","[class*='chapter_content']","[class*='reader-content']","[class*='reader_content']","[class*='novel-content']","[id*='chapter']","[id*='reader']","[class*='content']","[id*='content']"];
+    const roots = new Map();
+    for (const selector of selectors) {
+      try {
+        for (const el of document.querySelectorAll(selector)) {
+          if (!visible(el) || roots.has(el)) continue;
+          const identity = (el.id || "") + " " + (typeof el.className === "string" ? el.className : "");
+          let priority = el.matches("article") ? 900 : 0;
+          if (el.matches("main,[role='main']")) priority += 250;
+          if (/chapter|reader|novel/i.test(identity)) priority += 700;
+          if (/content/i.test(identity)) priority += 200;
+          roots.set(el, { selector, priority });
+        }
+      } catch (_) {}
+    }
+    const paragraphs = [...document.querySelectorAll("p")].filter(p => visible(p) && clean(p.innerText || p.textContent).length >= 20);
+    const groups = new Map();
+    for (const p of paragraphs) {
+      const root = p.closest("article,main,[role='main'],[class*='chapter-content'],[class*='reader-content'],[class*='content']") || p.parentElement;
+      if (root && visible(root)) {
+        if (!groups.has(root)) groups.set(root, []);
+        groups.get(root).push(clean(p.innerText || p.textContent));
+      }
+    }
+    for (const [root, lines] of groups) if (!roots.has(root)) roots.set(root, { selector: "visible-paragraph-group", priority: 350, override: lines.join("\n") });
+    const candidates = [];
+    for (const [root, meta] of roots) {
+      const candidate = clean(meta.override || visibleText(root));
+      if (candidate.length < 80 || candidate.length > 250000) continue;
+      const useful = (candidate.match(/[\p{L}\p{M}\p{N}]/gu) || []).length / (candidate.length || 1);
+      if (useful < 0.45) continue;
+      const lines = candidate.split("\n").filter(x => x.trim());
+      const repeated = lines.length - new Set(lines).size;
+      candidates.push({ candidate, selector: meta.selector, score: candidate.length + meta.priority - repeated * 35 });
+    }
+    candidates.sort((a, b) => b.score - a.score);
+    if (candidates[0]) { text = candidates[0].candidate; method = "visible-page-text"; chosenSelector = candidates[0].selector; }
+  }
+  if (text.length < 80) {
+    alert("NovelLens: ยังตรวจพบข้อความที่มองเห็นได้ไม่มากพอ (" + text.length + " ตัวอักษร)\nลองลากเลือกเนื้อหาที่อ่านได้อย่างน้อยหนึ่งย่อหน้า แล้วกด bookmarklet อีกครั้ง หรือใช้ภาพที่คุณมีสิทธิ์ใช้งานกับ OCR");
+    return;
+  }
+  const host = location.hostname;
+  const title = document.querySelector("h1")?.innerText.trim() || document.querySelector("meta[property='og:title']")?.content || document.title;
+  const privateUseCount = (text.match(/[\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]/gu) || []).length;
+  const links = [...document.querySelectorAll("a[href]")].filter(a => {
+    try { const u = new URL(a.href, location.href); return /readawrite\.com$/.test(u.hostname) && /\/a\//.test(u.pathname); }
+    catch (_) { return false; }
+  });
+  const storyLink = links.find(a => a.href !== location.href && !/ตอนที่|chapter|episode/i.test(a.innerText))?.href || location.href;
+  const sourceFont = getComputedStyle(document.querySelector("article") || document.querySelector("main") || document.body).fontFamily;
+  const payload = { type:"novel-text", text, title:document.title, chapterTitle:title, sourceUrl:location.href, storyUrl:storyLink, sourceHost:host, sourceFont, captureMethod:method, captureSelector:chosenSelector, selectionLength:selection.length, capturedLength:text.length, privateUseCount, capturedAt:new Date().toISOString() };
+  const target = window.open(APP, "_blank");
+  if (!target) { alert("NovelLens: เบราว์เซอร์บล็อกหน้าต่างใหม่ ให้เปิด NovelLens ค้างไว้และอนุญาตป๊อปอัป แล้วลองอีกครั้ง"); return; }
+  const origin = new URL(APP).origin;
+  addEventListener("message", function handshake(e) {
+    if (e.source !== target || e.origin !== origin || e.data !== "novel-ready") return;
+    target.postMessage(payload, origin);
+    removeEventListener("message", handshake);
+  });
 }
-if(text.length<80){alert("NovelLens: ยังตรวจพบข้อความที่มองเห็นได้ไม่มากพอ ("+text.length+" ตัวอักษร)\nลองลากเลือกเนื้อหาที่อ่านได้อย่างน้อยหนึ่งย่อหน้า แล้วกด bookmarklet อีกครั้ง หรือใช้ภาพที่คุณมีสิทธิ์ใช้งานกับ OCR");return;}
-const host=location.hostname;
-const title=document.querySelector("h1")?.innerText.trim()||document.querySelector("meta[property='og:title']")?.content||document.title;
-const pua=(text.match(/[\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]/gu)||[]).length;
-const links=[...document.querySelectorAll("a[href]")].filter(a=>{try{const u=new URL(a.href,location.href);return /readawrite\.com$/.test(u.hostname)&&/\/a\//.test(u.pathname);}catch(_){return false;}});
-const storyLink=links.find(a=>a.href!==location.href&&!/ตอนที่|chapter|episode/i.test(a.innerText))?.href||location.href;
-const sourceFont=getComputedStyle(document.querySelector("article")||document.querySelector("main")||document.body).fontFamily;
-const payload={type:"novel-text",text,title:document.title,chapterTitle:title,sourceUrl:location.href,storyUrl:storyLink,sourceHost:host,sourceFont,captureMethod:method,captureSelector:chosenSelector,selectionLength:selection.length,capturedLength:text.length,privateUseCount:pua,capturedAt:new Date().toISOString()};
-const w=window.open(APP,"_blank");if(!w){alert("NovelLens: เบราว์เซอร์บล็อกหน้าต่างใหม่ ให้เปิด NovelLens ค้างไว้แล้วอนุญาตป๊อปอัป หรือเปิดเว็บ NovelLens ก่อนลองใหม่");return;}
-const origin=new URL(APP).origin;
-addEventListener("message",function f(e){if(e.source!==w||e.origin!==origin||e.data!=="novel-ready")return;w.postMessage(payload,origin);removeEventListener("message",f);});
-})()`;
+const BOOKMARKLET = app => "javascript:(" + captureReadAWritePage.toString() + ")(" + JSON.stringify(app) + ")";
 $("bm").href = BOOKMARKLET(location.href.split("#")[0]);
 $("bm").onclick = e => { e.preventDefault(); status.textContent = "ลากปุ่มนี้ไปไว้ที่แถบบุ๊กมาร์ก แล้วไปกดที่หน้าตอนนิยาย"; };
 addEventListener("message", e => {
