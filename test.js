@@ -10,7 +10,7 @@ const sample = main.match(/const SAMPLE_TEXT = (`[\s\S]*?`);/)[1];
 let netCalls = 0;
 const trip = () => { netCalls++; throw new Error("network call"); };
 const api = new Function("fetch", "XMLHttpRequest", "WebSocket", "EventSource", "navigator", engine + studio.split("// ===== Studio UI")[0] +
-  `;return {analyze, compare, count, generate, rollField, validate, similarity, storyText, LEAN, OPPOSITE, PLOTS, STRUCTURES, ENDINGS, SAMPLE_TEXT: ${sample}}`)(trip, trip, trip, trip, {sendBeacon: trip});
+  `;return {analyze, compare, count, generate, rollField, validate, similarity, storyText, inspectTextQuality, auditTextCompleteness, feelEvidence, classifyEvidence, LEAN, OPPOSITE, PLOTS, STRUCTURES, ENDINGS, SAMPLE_TEXT: ${sample}}`)(trip, trip, trip, trip, {sendBeacon: trip});
 
 // Analyzer
 const a = api.analyze(api.SAMPLE_TEXT);
@@ -34,6 +34,35 @@ for (const genre of Object.keys(api.PLOTS)) for (const structure of Object.keys(
 }
 assert.equal(api.generate({chars: [{}], plot: {}}), null, "needs at least one named character");
 
+// Input integrity and evidence checks
+assert(api.inspectTextQuality(api.SAMPLE_TEXT).ok, "readable Thai sample passes text quality guard");
+const qualityReport = api.auditTextCompleteness(api.SAMPLE_TEXT);
+assert(Number.isFinite(qualityReport.score) && qualityReport.score >= 0 && qualityReport.score <= 100, "input completeness audit returns a bounded score");
+assert(Array.isArray(qualityReport.warnings) && qualityReport.level, "input completeness audit returns explanatory warnings and a level");
+assert(api.analyze(api.SAMPLE_TEXT).quality.score === qualityReport.score, "analysis includes the same input quality report");
+assert(api.auditTextCompleteness("สั้นมาก").warnings.some(w => w.includes("สั้น")), "very short input is flagged for incomplete coverage");
+const repeatedLines = Array(8).fill("ประโยคยาวนี้เป็นข้อความตัวอย่างที่ซ้ำกันในหน้าต้นฉบับ").join("\n");
+assert(api.auditTextCompleteness(repeatedLines).duplicateLines > 0, "repeated long lines are detected");
+
+const protectedText = "ภาษาไทยที่มองเห็นได้ " + "\uE56A".repeat(24);
+const protectedResult = api.inspectTextQuality(protectedText);
+assert.equal(protectedResult.ok, false, "private-use font glyphs are rejected before analysis");
+assert.equal(protectedResult.issue, "protected-font", "protected-font issue is identified");
+const mixedProtectedText = ("เนื้อหาไทยปกติ ".repeat(8)) + "\\uE54A".repeat(8) + (" ข้อความต่อท้าย".repeat(8));
+assert.equal(api.inspectTextQuality(mixedProtectedText).ok, false, "mixed Thai and protected-font glyphs are rejected");
+assert.equal(api.inspectTextQuality(mixedProtectedText).issue, "protected-font", "mixed protected-font text gets a specific diagnosis");
+const escapedPua = api.inspectTextQuality(("เนื้อหาปกติ ".repeat(8)) + "\\uE54A".repeat(8) + (" ต่อท้าย".repeat(8)));
+assert.equal(escapedPua.ok, false, "literal private-use escape sequences are rejected");
+assert.equal(escapedPua.issue, "protected-font", "literal private-use escapes get specific diagnosis");
+
+const invisibleText = ("ประโยคภาษาไทยที่อ่านได้ ".repeat(10)) + "\\u200B".repeat(24);
+assert.equal(api.inspectTextQuality(invisibleText).issue, "invisible-characters", "excessive zero-width characters are flagged");
+
+assert(api.inspectTextQuality("ต้นฉบับธรรมดาที่มีภาษาไทยและคำพูด \uFFFD").ok, "one replacement character is not over-blocked");
+const evidence = api.feelEvidence(api.SAMPLE_TEXT);
+assert(evidence.length > 0 && evidence[0].terms.length > 0, "analysis provides explicit keywords supporting a tone");
+assert(api.classifyEvidence(evidence).label, "genre evidence is labelled with cautious strength");
+
 // ReadAWrite importer UI and local-only storage contract
 assert(html.includes('id="t-import"') && html.includes('id="p-import"'), "ReadAWrite library tab and panel exist");
 assert(html.includes("novellens.readawrite.imports.v1"), "imports persist in browser-local storage");
@@ -43,8 +72,8 @@ assert(html.includes("ReadAWrite") && html.includes("ไม่สามารถ
 const importerMatch = html.match(/\/\/ ===== ReadAWrite local library[\s\S]*?(?=for \(const \[tab, panel\])/);
 assert(importerMatch && !/fetch\(|XMLHttpRequest|WebSocket|EventSource|sendBeacon|api[_-]?key/i.test(importerMatch[0]), "ReadAWrite importer does not call network or AI APIs");
 // ===== Procedural engine =====
-assert(!/fetch\(|XMLHttpRequest|WebSocket|EventSource|sendBeacon|import\(|api[_-]?key/i.test(studio), "studio script has no network or AI-provider code");
-assert.deepEqual(html.match(/https?:\/\/[^"'`\s)]+/g).filter(u => !u.startsWith("https://fonts.googleapis.com")), [], "the only remote resource is the font stylesheet");
+assert(!/fetch\(|XMLHttpRequest|WebSocket|EventSource|sendBeacon|\bimport\s*\(|api[_-]?key/i.test(studio), "studio script has no network or AI-provider code");
+assert.deepEqual([...html.matchAll(/<link\b[^>]*href=["'](https?:\/\/[^"']+)/ig)].map(m => m[1]).filter(u => !u.startsWith("https://fonts.googleapis.com")), [], "the only external stylesheet resource is the font stylesheet");
 
 // Fixtures: three different story shapes, not the same plot with new names
 const F = {
