@@ -273,6 +273,7 @@ summary::marker{color:var(--pen)}
             <button id="analyzer-image-ocr" type="button">อ่านข้อความจากภาพ (OCR)</button>
           </div>
           <div id="analyzer-image-progress" class="analyzer-image-progress" hidden><i></i></div>
+          <div id="analyzer-image-quality" class="analyzer-image-quality" hidden></div>
           <label for="analyzer-image-output">ข้อความจากภาพ (ตรวจแก้ได้ก่อนนำไปวิเคราะห์)</label>
           <textarea id="analyzer-image-output" class="analyzer-image-output" placeholder="หลัง OCR เสร็จ ข้อความจะปรากฏตรงนี้ ให้ตรวจคำที่อ่านผิดก่อน"></textarea>
           <div class="analyzer-image-tools">
@@ -505,6 +506,11 @@ function inspectTextQuality(raw){
   const text=String(raw||"").trim();
   const chars=[...text], size=chars.length||1;
   const pua=(text.match(/[\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]/gu)||[]).length;
+  // Treat literal Unicode escape spellings as suspicious text instead of interpreting/decrypting them.
+  const escapedCodes=text.match(/\\u(?:\{[0-9A-Fa-f]{4,6}\}|[0-9A-Fa-f]{4})/g)||[];
+  const escapedPoints=escapedCodes.map(token=>parseInt(token.includes("{")?token.slice(3,-1):token.slice(2),16));
+  const escapedPua=escapedPoints.filter(cp=>(cp>=0xE000&&cp<=0xF8FF)||(cp>=0xF0000&&cp<=0xFFFFD)||(cp>=0x100000&&cp<=0x10FFFD)).length;
+  const escapedInvisible=escapedPoints.filter(cp=>(cp>=0x200B&&cp<=0x200F)||cp===0x2060||cp===0xFEFF).length;
   const replacement=(text.match(/\uFFFD/g)||[]).length;
   const controls=(text.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g)||[]).length;
   const thai=(text.match(/[\u0E00-\u0E7F]/g)||[]).length;
@@ -512,16 +518,52 @@ function inspectTextQuality(raw){
   const visibleLetter=(text.match(/[\p{L}\p{N}]/gu)||[]).length;
   const puaRatio=pua/size, replacementRatio=replacement/size, zeroWidthRatio=zeroWidth/size;
   // A few unusual characters may be legitimate. These combined signals indicate a broken or obfuscated text layer.
-  const protectedFont=(pua>=5 && puaRatio>=0.003) || (pua>=3 && puaRatio>=0.02);
+  const escapedPuaRatio=escapedPua/size, escapedInvisibleRatio=escapedInvisible/size;
+  const protectedFont=(pua>=5 && puaRatio>=0.003) || (pua>=3 && puaRatio>=0.02)
+    || (escapedPua>=3 && escapedPuaRatio>=0.01);
   const damagedEncoding=(replacement>=3 && replacementRatio>=0.002) || controls>=4;
   const suspiciousText=(size>=120 && visibleLetter/size<0.42 && pua+replacement+controls>=4);
-  const excessiveInvisible=(size>=120 && zeroWidth>=12 && zeroWidthRatio>=0.025);
+  const excessiveInvisible=(size>=120 && zeroWidth>=12 && zeroWidthRatio>=0.025)
+    || (size>=120 && escapedInvisible>=12 && escapedInvisibleRatio>=0.025);
   let issue="",reason="";
-  if(protectedFont){issue="protected-font";reason="พบอักขระ Private Use Area "+pua.toLocaleString()+" ตัว ("+(puaRatio*100).toFixed(1)+"%) ข้อความจาก DOM อาจเป็นรหัสฟอนต์ ไม่ใช่ภาษาไทยจริง";}
+  if(protectedFont){issue="protected-font";reason="พบอักขระหรือ escape ที่อ้างถึง Private Use Area "+(pua+escapedPua).toLocaleString()+" รายการ ("+pua.toLocaleString()+" อักขระจริง, "+escapedPua.toLocaleString()+" escape) ข้อความอาจไม่ใช่ภาษาอ่านได้";}
   else if(damagedEncoding){issue="encoding-damage";reason="พบอักขระทดแทนหรือ control characters มากผิดปกติ ข้อความอาจเสียหายระหว่างคัดลอก";}
   else if(excessiveInvisible){issue="invisible-characters";reason="พบอักขระ zero-width จำนวนมากผิดปกติ ข้อความอาจถูกแปลงรูปแบบหรือคัดลอกมาไม่สมบูรณ์";}
   else if(suspiciousText){issue="suspicious-text";reason="สัดส่วนตัวอักษรที่อ่านได้ต่ำผิดปกติเมื่อเทียบกับความยาวข้อความ จึงไม่มั่นใจว่าเป็นต้นฉบับที่สะอาด";}
-  return {ok:!issue,size,pua,replacement,controls,thai,zeroWidth,visibleLetter,puaRatio,replacementRatio,zeroWidthRatio,issue,message:reason};
+  return {ok:!issue,size,pua,escapedPua,escapedInvisible,replacement,controls,thai,zeroWidth,visibleLetter,puaRatio,escapedPuaRatio,replacementRatio,zeroWidthRatio,escapedInvisibleRatio,issue,message:reason};
+}
+
+function auditTextCompleteness(raw){
+  const text=String(raw||"").replace(/\r\n?/g,"\n").trim();
+  const chars=Array.from(text), size=chars.length||1;
+  const lines=text.split(/\n+/).map(line=>line.trim()).filter(Boolean);
+  const visible=(text.match(/[\p{L}\p{M}\p{N}]/gu)||[]).length;
+  const visibleRatio=visible/size;
+  const replacement=(text.match(/\uFFFD/g)||[]).length;
+  const pua=(text.match(/[\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]/gu)||[]).length;
+  const controls=(text.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g)||[]).length;
+  const repeatedRuns=(text.match(/(.)\1{7,}/gu)||[]).length;
+  const canonical=line=>line.normalize("NFC").toLocaleLowerCase().replace(/[\s\p{P}\p{S}]+/gu,"");
+  const substantial=lines.map(canonical).filter(line=>Array.from(line).length>=24);
+  const frequency=new Map();
+  for(const line of substantial) frequency.set(line,(frequency.get(line)||0)+1);
+  const duplicateLines=[...frequency.values()].reduce((n,count)=>n+Math.max(0,count-1),0);
+  const duplicateRatio=duplicateLines/(substantial.length||1);
+  const warnings=[];
+  let score=100;
+  if(size<300){warnings.push("ข้อความสั้นมาก อาจมีเพียงบางส่วนของต้นฉบับ");score-=25;}
+  else if(size<800){warnings.push("ข้อความค่อนข้างสั้น ผลวิเคราะห์อาจยังไม่ครอบคลุมทั้งตอน");score-=12;}
+  if(size>=200&&visibleRatio<0.52){warnings.push("สัดส่วนตัวอักษรที่อ่านได้ต่ำผิดปกติ ควรตรวจข้อความที่นำเข้าหรือผล OCR");score-=12;}
+  if(substantial.length>=6&&duplicateRatio>=0.20){warnings.push("พบบรรทัด/ย่อหน้าซ้ำจำนวนมาก อาจเกิดจากการนำเข้าซ้ำหรือ OCR ซ้ำ");score-=18;}
+  else if(substantial.length>=6&&duplicateRatio>=0.10){warnings.push("พบบรรทัด/ย่อหน้าซ้ำบางส่วน ควรตรวจว่ามีภาพหรือข้อความทับซ้อนหรือไม่");score-=9;}
+  if(size>=1200&&lines.length<=2){warnings.push("ข้อความยาวแต่แทบไม่มีการแบ่งบรรทัด อาจทำให้การแยกประโยคและฉากคลาดเคลื่อน");score-=8;}
+  if(pua){warnings.push("มีอักขระในกลุ่ม Private Use Area ซึ่งอาจไม่ใช่ตัวอักษรที่อ่านได้");score-=Math.min(30,pua*3);}
+  if(replacement){warnings.push("มีอักขระแทนค่าที่เสียหาย (�) ควรตรวจเทียบกับต้นฉบับ");score-=Math.min(30,replacement*8);}
+  if(controls){warnings.push("มีอักขระควบคุมที่ไม่ควรปรากฏในข้อความปกติ");score-=Math.min(20,controls*4);}
+  if(repeatedRuns){warnings.push("พบตัวอักษรเดิมซ้ำติดกันยาวผิดปกติ ซึ่งอาจเกิดจาก OCR หรือการคัดลอก");score-=Math.min(15,repeatedRuns*5);}
+  score=Math.max(0,Math.min(100,Math.round(score)));
+  const level=size<300?"ข้อมูลสั้นมาก":score>=85?"สัญญาณคุณภาพดี":score>=65?"ควรตรวจทาน":"เสี่ยงข้อความไม่สมบูรณ์";
+  return {score,level,size,lineCount:lines.length,visible,visibleRatio,duplicateLines,duplicateRatio,replacement,pua,controls,repeatedRuns,warnings};
 }
 
 function classifyEvidence(evidence){
@@ -543,6 +585,7 @@ function feelEvidence(text){
 function analyze(raw){
   const text = raw.replace(/\r/g, "").trim();
   const chars = text.replace(/\s/g, "").length || 1;
+  const quality = auditTextCompleteness(text);
   const paras = text.split(/\n+/).map(s => s.trim()).filter(Boolean);
   const quotes = text.match(QUOTE) || [];
   const narration = text.replace(QUOTE, " "), speech = quotes.join(" ");
@@ -554,6 +597,7 @@ function analyze(raw){
   const peak = curve.reduce((m, x, i) => x.total > curve[m].total ? i : m, 0);
 
   return {
+    quality,
     chars,
     paraCount: paras.length,
     dialogue: sum(quotes.map(q => q.replace(/\s/g, "").length)) / chars,
@@ -671,6 +715,11 @@ function render(a){
       el("p", {class:"note"}, "แนวจากคำชี้เฉพาะ: " + (a.genreAnalysis?.confidence || "ระบบเดิม") + " — " + (a.genreAnalysis?.detail || "ระบบเทียบคำสำคัญ")),
       a.genreAnalysis?.evidence?.length ? el("p", {class:"note"}, "หลักฐาน: " + a.genreAnalysis.evidence.map(x => x.term + " ×" + x.hits).join(" · ")) : null,
       el("p", {class:"note"}, "ประเมินจากคำที่ใช้ " + a.chars.toLocaleString() + " ตัวอักษร " + a.paraCount + " ย่อหน้า" + (a.chars < 800 ? " · ข้อความสั้น ผลอาจคลาดเคลื่อน" : ""))),
+    sec("ตรวจคุณภาพและความครบถ้วนของข้อความ",
+      el("p", {}, "ผลคัดกรอง: " + a.quality.level + " · คะแนนตัวชี้วัด " + a.quality.score + "/100"),
+      dl([["ตัวอักษร", a.quality.size.toLocaleString()], ["บรรทัดที่ตรวจพบ", a.quality.lineCount.toLocaleString()], ["สัดส่วนตัวอักษรอ่านได้", Math.round(a.quality.visibleRatio * 100) + "%"], ["บรรทัดซ้ำ", a.quality.duplicateLines.toLocaleString()]]),
+      a.quality.warnings.length ? list(a.quality.warnings) : el("p", {class:"note"}, "ไม่พบสัญญาณทั่วไปของข้อความเสียหายหรือซ้ำซ้อน"),
+      el("p", {class:"note"}, "นี่คือการคัดกรองเชิงกฎ ไม่ใช่เปอร์เซ็นต์ความถูกต้อง และไม่สามารถยืนยันได้ว่าคัดลอกมาครบทั้งตอน ต้องตรวจเทียบกับต้นฉบับเสมอ")),
     sec("ประโยคที่คัดมาเป็นร่างเรื่องย่อ (ไม่ใช่การสรุปความหมายโดยตรง)", a.summary.length ? el("ol", {class:"summary"}, a.summary.map(s => el("li", {}, s))) : el("p", {class:"note"}, "ข้อความสั้นเกินไป")),
     sec("หลักฐานที่ใช้จับโทน", a.evidence?.length
       ? el("div", {class:"rw-list"}, a.evidence.slice(0, 4).map(x => el("div", {class:"rw-item"}, el("div", {}, el("b", {}, x.genre), el("p", {}, "พบคำ/วลีตามรายการคำ " + x.total + " ครั้ง"), el("p", {class:"note"}, "ตัวอย่างคำที่พบ: " + x.terms.map(t => t.word + " ×" + t.hits).join(" · "))))))
@@ -752,7 +801,10 @@ function run(){
   if (!text) { status.textContent = "วางข้อความที่อ่านได้หรือเปิดไฟล์ต้นฉบับก่อน"; return; }
   const quality = inspectTextQuality(text);
   if (!quality.ok) { saveAnalysisSession(text); showQualityWarning(quality); return; }
-  ref = analyze(text); render(ref); saveAnalysisSession(text); status.textContent = "";
+  ref = analyze(text); render(ref); saveAnalysisSession(text);
+  status.textContent = ref.quality.warnings.length
+    ? "วิเคราะห์แล้ว แต่พบ " + ref.quality.warnings.length + " สัญญาณที่ควรตรวจในรายงานคุณภาพด้านล่าง"
+    : "";
 }
 $("go").onclick = () => { isExample = false; run(); };
 $("clear").onclick = () => { src.value = ""; try{localStorage.removeItem(ANALYSIS_SESSION_KEY);}catch(_){} src.focus(); updateCount(); report.replaceChildren(); status.textContent = ""; ref = null; };
