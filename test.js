@@ -213,7 +213,18 @@ const writerProject = {
 writerProject.chapters = writerUtils.buildChapterPlan(writerProject, writerCharacters);
 assert.equal(writerProject.chapters.length, 12, "chapter planner creates the requested chapter count");
 assert(writerProject.chapters[0].goal && writerProject.chapters.at(-1).hook, "chapter plan includes goal and ending hook");
+assert(writerProject.chapters[0].scene.includes(writerProject.premise), "opening scene connects to the user's story premise");
+assert(writerProject.chapters.every(c => c.scene && c.conflict), "chapter planner seeds scene and conflict guidance instead of leaving every field blank");
+assert(writerProject.chapters.some(c => c.clue), "chapter plan seeds clues around planned twists");
 assert(writerProject.chapters.some(c => c.twist), "chapter plan places suggested twists for a longer story");
+const dazaiProject = {
+  ...writerProject,
+  stylePreset: "ญี่ปุ่นคลาสสิก · ดาไซ โอซามุ",
+  styleTraits: "การสำรวจจิตใจและความแปลกแยก, เสียดสีสังคมอย่างขมขื่น, อารมณ์ขันสีดำแบบยับยั้ง, ความเปราะบางที่ซ่อนหลังถ้อยคำเรียบ"
+};
+const dazaiChapters = writerUtils.buildChapterPlan(dazaiProject, writerCharacters);
+assert(dazaiChapters.some(c => ["ตลกร้าย", "เสียดสีสังคม", "ขมขื่น"].includes(c.mood)), "high-level style reference affects the chapter mood sequence");
+assert(dazaiChapters.some((c, i) => c.tension !== writerProject.chapters[i].tension), "restrained style traits affect the suggested tension curve");
 const blendedWriterCharacter = writerUtils.createBlend(writerCharacters,{ "wr-a":60, "wr-b":40 });
 assert(blendedWriterCharacter.name.includes("มิน") && blendedWriterCharacter.name.includes("เรน"), "character blend names both source profiles");
 assert(blendedWriterCharacter.traits.includes("ช่างสังเกต") && blendedWriterCharacter.traits.includes("ตลกร้าย"), "character blend combines traits");
