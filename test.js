@@ -12,7 +12,7 @@ const sample = main.match(/const SAMPLE_TEXT = (`[\s\S]*?`);/)[1];
 let netCalls = 0;
 const trip = () => { netCalls++; throw new Error("network call"); };
 const api = new Function("fetch", "XMLHttpRequest", "WebSocket", "EventSource", "navigator", engine + studio.split("// ===== Studio UI")[0] +
-  `;return {analyze, compare, count, generate, rollField, validate, similarity, storyText, inspectTextQuality, auditTextCompleteness, normalizeReadAWriteUrl, extractHtmlFromMhtml, feelEvidence, classifyEvidence, LEAN, OPPOSITE, PLOTS, STRUCTURES, ENDINGS, SAMPLE_TEXT: ${sample}}`)(trip, trip, trip, trip, {sendBeacon: trip});
+  `;return {analyzeStory, splitChapters, analyze, compare, count, generate, rollField, validate, similarity, storyText, inspectTextQuality, auditTextCompleteness, normalizeReadAWriteUrl, extractHtmlFromMhtml, feelEvidence, classifyEvidence, LEAN, OPPOSITE, PLOTS, STRUCTURES, ENDINGS, SAMPLE_TEXT: ${sample}}`)(trip, trip, trip, trip, {sendBeacon: trip});
 
 // Analyzer
 const a = api.analyze(api.SAMPLE_TEXT);
@@ -246,5 +246,26 @@ assert(Number.isFinite(styleFingerprint.signals.dialogueRatio), "style scan repo
 assert(styleFingerprint.signals.repeatedWords.length >= 0, "style scan always returns a repeated-word list");
 assert(jsFileAvailable === true, "style scan utility loaded from the Writer's Room module");
 
+
+// Whole-story analysis
+{
+  const A = "ฝนตกตั้งแต่บ่ายสาม พิมพ์ดาวยืนอยู่หน้าร้านหนังสือเก่า เธอมองดูภูผาที่เดินเข้ามา \"คุณมาทุกวันพุธ\" พิมพ์ดาวพูด ภูผามองพิมพ์ดาวแล้วยิ้ม พิมพ์ดาวก้มลงมองหนังสือในมือ\n";
+  const B = "ภูผาเดินออกจากร้าน พิมพ์ดาวตะโกนเรียกภูผา \"อย่าไปนะ\" ภูผาหันไปมองพิมพ์ดาว ธามยืนดูอยู่ไกลๆ ธามพูดกับภูผาว่าเรื่องนี้ไม่ง่าย พิมพ์ดาวเดินตามภูผาไป\n";
+  const story = [1, 2, 3].map(i => "ตอนที่ " + i + "\n" + (i === 2 ? B : A).repeat(4)).join("\n");
+  const chs = api.splitChapters(story);
+  assert.deepEqual(chs.map(c => c.title), ["ตอนที่ 1", "ตอนที่ 2", "ตอนที่ 3"], "chapters are split at headings");
+  assert.equal(api.splitChapters(A.repeat(4)).length, 1, "no headings keeps one chapter");
+  assert.deepEqual(api.splitChapters("  "), [], "empty text gives no chapters");
+  const r = api.analyzeStory(chs, ["พิมพ์ดาว", "ภูผา", "ธาม"]);
+  assert.equal(r.count, 3);
+  assert.equal(r.perChapter.length, 3);
+  assert(r.perChapter.every(c => c.summary.length && c.how.length), "each chapter has a summary and writing notes");
+  assert.deepEqual(r.perChapter.map(c => c.fresh.join()), ["พิมพ์ดาว,ภูผา", "ธาม", ""], "new characters are reported where they first appear");
+  assert.equal(r.cast[0].name, "พิมพ์ดาว");
+  const pair = r.links.find(l => l.a === "พิมพ์ดาว" && l.b === "ภูผา");
+  assert(pair && pair.scenes === 12 && pair.bToA > pair.aToB, "who acts on whom is directional");
+  assert(!r.guessed && api.analyzeStory(chs).guessed, "guessed cast is flagged");
+  assert.equal(api.analyzeStory([]), null, "no chapters gives no report");
+}
 
 console.log("all checks passed");
