@@ -685,13 +685,13 @@
         const response=await fetch(u.href,{method:"GET",mode:"cors",credentials:"omit",redirect:"follow",signal:controller.signal});
         if(!response.ok)throw new Error("เซิร์ฟเวอร์ตอบกลับ HTTP "+response.status);
         const contentType=response.headers.get("content-type")||"";
-        if(!/(text\\/html|application\\/xhtml\\+xml|text\\/plain)/i.test(contentType))throw new Error("ปลายทางไม่ใช่หน้า HTML/ข้อความที่อ่านได้");
+        if(!/(text\/html|application\/xhtml\+xml|text\/plain)/i.test(contentType))throw new Error("ปลายทางไม่ใช่หน้า HTML/ข้อความที่อ่านได้");
         const announcedSize=Number(response.headers.get("content-length")||0);
         if(announcedSize>2000000)throw new Error("หน้าเว็บใหญ่เกินขีดจำกัด 2 MB");
         const rawText=await response.text();
         if(rawText.length>2000000)throw new Error("หน้าเว็บใหญ่เกินขีดจำกัด 2 MB");
         let title=u.hostname,content="";
-        if(/text\\/plain/i.test(contentType)){
+        if(/text\/plain/i.test(contentType)){
           content=rawText;
         }else{
           const doc=new DOMParser().parseFromString(rawText,"text/html");
@@ -701,18 +701,18 @@
           const candidateTexts=candidates.map(node=>String(node.textContent||"").trim()).filter(x=>x.length>0).sort((a,b)=>b.length-a.length);
           content=candidateTexts[0]||(doc.body&&doc.body.textContent)||"";
         }
-        content=String(content).replace(/\\u00a0/g," ").replace(/[ \\t]+/g," ").replace(/\\n[ \\t]+/g,"\\n").replace(/\\n{3,}/g,"\\n\\n").trim();
+        content=String(content).replace(/\u00a0/g," ").replace(/[ \t]+/g," ").replace(/\n[ \t]+/g,"\n").replace(/\n{3,}/g,"\n\n").trim();
         if(content.length<120)throw new Error("อ่านเนื้อหาหลักได้น้อยเกินไป อาจเป็นเว็บที่สร้างเนื้อหาด้วย JavaScript");
         return {url:u.href,title:title||u.hostname,excerpt:content.slice(0,5000)};
       }finally{clearTimeout(timeout);}
     }
     const sourceCard=card("เพิ่มหลายแหล่งพร้อมกัน","วาง URL หลายบรรทัดได้ ระบบจะลองดึงเนื้อหาจากเว็บที่อนุญาต CORS และบันทึกแหล่งที่อ่านไม่ได้ไว้ให้เติมสรุปเอง ไม่สามารถข้ามข้อจำกัดของทุกเว็บไซต์ได้");
-    const urls=textareaField("URL อ้างอิง (หนึ่งลิงก์ต่อบรรทัด)","","","https://example.com/biography\\nhttps://example.com/interview",4);
+    const urls=textareaField("URL อ้างอิง (หนึ่งลิงก์ต่อบรรทัด)","","","https://example.com/biography\nhttps://example.com/interview",4);
     const manualTitle=field("ชื่อชุดแหล่งอ้างอิง","",()=>{},{placeholder:"เช่น บุคลิกและบทสัมภาษณ์"});
     const excerpt=textareaField("ข้อความสรุป/บันทึกจากแหล่งที่คุณตรวจแล้ว","","","บันทึกเพิ่มเติมที่ต้องการแนบกับทุกแหล่ง หรือใช้แทนข้อความที่ดึงไม่ได้",4);
     const fetchStatus=h("p","wr-muted","จำกัด 12 URL ต่อครั้ง · ส่งคำขอเฉพาะเมื่อกดปุ่ม · ถ้าเว็บบล็อก CORS ให้ใช้ลิงก์และสรุปที่คุณตรวจเอง");
     const fetchSources=btn("ลองดึงข้อความจาก URL เหล่านี้",async()=>{
-      const rawLines=urls.node.value.split(/\\n+/).map(x=>x.trim()).filter(Boolean);
+      const rawLines=urls.node.value.split(/\n+/).map(x=>x.trim()).filter(Boolean);
       if(!rawLines.length){fetchStatus.textContent="วาง URL อย่างน้อยหนึ่งลิงก์ก่อน";return;}
       if(rawLines.length>12){fetchStatus.textContent="มี "+rawLines.length+" URL · แบ่งทำครั้งละไม่เกิน 12 URL เพื่อไม่ให้เว็บค้าง";return;}
       const valid=[],seen=new Set();let skipped=0;
@@ -755,12 +755,12 @@
           saved.excerpt=result.page.excerpt;
           saved.fetchStatus="fetched";fetched++;
           const noteParts=[previousNotes,userNotes?"บันทึกจากผู้ใช้: "+userNotes:"","ดึงข้อความหน้าเว็บได้แล้ว · ควรตรวจชื่อ บุคลิก และข้อเท็จจริงกับต้นทาง"];
-          saved.notes=Array.from(new Set(noteParts.filter(Boolean))).join("\\n");
+          saved.notes=Array.from(new Set(noteParts.filter(Boolean))).join("\n");
         }else{
           if(!saved.excerpt&&userNotes)saved.excerpt=userNotes;
           saved.fetchStatus="manual-required";manual++;
           const noteParts=[previousNotes,"ดึงเนื้อหาอัตโนมัติไม่สำเร็จ: "+result.error+" · อาจเกิดจาก CORS, ระบบป้องกันบอต หรือเว็บต้องใช้ JavaScript"];
-          saved.notes=Array.from(new Set(noteParts.filter(Boolean))).join("\\n");
+          saved.notes=Array.from(new Set(noteParts.filter(Boolean))).join("\n");
         }
       }
       save();
@@ -769,7 +769,7 @@
       statusMessage="นำเข้าแหล่งอ้างอิง "+valid.length+" รายการแล้ว";render();
     });
     const saveLinks=btn("เก็บเฉพาะลิงก์ (ไม่ดึงหน้าเว็บ)",()=>{
-      const linkLines=urls.node.value.split(/\\n+/).map(x=>x.trim()).filter(Boolean);
+      const linkLines=urls.node.value.split(/\n+/).map(x=>x.trim()).filter(Boolean);
       let added=0,skipped=0;
       const userNotes=excerpt.node.value.trim();
       for(const raw of linkLines){
