@@ -490,8 +490,8 @@
       ["characters","คลังตัวละคร","◈"],["blend","ผสมตัวละคร","✳"],["references","โต๊ะอ้างอิง","⌕"],
       ["planner","Story Planner","▤"],["calendar","ปฏิทินเขียน","▦"]
     ];
-    for(const [value,label,symbol] of items){
-      const b=btn(symbol+"  "+label,()=>{activeView=value;state.view=value;save();render();},"wr-tab"+(activeView===value?" active":""));
+    for(const [value,label] of items){
+      const b=btn(label,()=>{activeView=value;state.view=value;save();render();},"wr-tab"+(activeView===value?" active":""));
       b.setAttribute("aria-pressed",String(activeView===value));nav.append(b);
     }
     return nav;

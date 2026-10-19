@@ -1,0 +1,87 @@
+/* Theme fit: loaded last so every tab speaks the editor's-desk language.
+   Rules: 4px corners, ink primary buttons, red pen only as an accent, highlighter for "selected",
+   dashed separators, underline fields, no gradients or glows. */
+:root{--r:4px}
+input[type=checkbox],input[type=radio],input[type=range]{accent-color:var(--pen)}
+
+/* Only the analyzer tab opens with the hero; other tabs start at their own content */
+body:not(:has(#t-analyze[aria-selected="true"])) :is(.hero,.steps){display:none}
+body:not(:has(#t-analyze[aria-selected="true"])) main{padding-top:clamp(20px,4vw,40px)}
+
+/* Native file pickers look like our ghost buttons */
+input[type=file]{font:inherit;font-size:14px;color:var(--pencil);max-width:100%}
+input[type=file]::file-selector-button{font:inherit;font-size:14px;font-weight:600;margin-right:12px;padding:7px 14px;border:1px solid var(--rule2);border-radius:var(--r);background:transparent;color:var(--ink);cursor:pointer;transition:border-color .15s,background-color .15s}
+input[type=file]::file-selector-button:hover{border-color:var(--ink);background:var(--hl)}
+
+/* Import desk and image tools */
+.rw-card{border-radius:var(--r)}
+.rw-card .tag{background:none;padding:0;color:var(--pen);font-weight:700;font-size:12px;letter-spacing:.06em}
+.rw-input input,.rw-html-import,.rw-stat,.rw-item,.rw-empty,.rw-json-import{border-radius:var(--r)}
+.rw-input input{border:0;border-bottom:1px solid var(--rule2);border-radius:0;background:transparent;font-family:var(--serif)}
+.rw-input input:hover{border-bottom-color:var(--ink)}
+.rw-stat,.rw-item,.rw-html-import{background:var(--paper);border-style:dashed}
+.rw-stat b{color:var(--pen)}
+.rw-html-import{background:transparent}
+
+/* Writer's room */
+.wr-hero{border-radius:var(--r);border:1px solid var(--rule2);border-top:4px solid var(--pen);background:var(--paper);box-shadow:var(--lift)}
+.wr-hero:after{display:none}
+.wr-hero-summary{border-radius:var(--r);background:transparent;backdrop-filter:none;border-style:dashed}
+.wr-hero-title{font-weight:700;letter-spacing:0}
+.wr-kicker{letter-spacing:.06em}
+.wr-tabs{gap:4px;padding:0;border:0;border-bottom:1px solid var(--ink);border-radius:0;background:transparent}
+#writer-room-root .wr-tab{border:0!important;border-radius:var(--r) var(--r) 0 0!important;padding:10px 16px!important;font-size:14px!important;font-weight:600;background-image:linear-gradient(var(--hl),var(--hl))!important;background-size:0 40%!important;background-position:0 85%!important;background-repeat:no-repeat!important;transition:background-size .3s var(--ease,ease),color .2s}
+#writer-room-root .wr-tab:hover{color:var(--ink)!important}
+#writer-room-root .wr-tab.active{color:var(--ink)!important;background-size:100% 40%!important;box-shadow:none}
+.wr-card,.wr-chapter,.wr-project-toolbar,.wr-statbox,.wr-continuity,.wr-confirm-plan,.wr-status,.wr-empty,.wr-check-row,.wr-calendar-cell{border-radius:var(--r)}
+.wr-card{box-shadow:var(--lift)}
+.wr-card-title{font-weight:700}
+.wr-badge,.wr-mood-choice{border-radius:var(--r)}
+.wr-progress{border-radius:var(--r)}.wr-progress span{border-radius:0;background:var(--pen)}
+.wr-chapter[open]{box-shadow:var(--lift)}
+.wr-chapter-num{border-radius:var(--r);background:var(--ink);color:var(--paper);border-color:var(--ink)}
+
+/* Buttons: ink fill, pen on hover, ghost for secondary */
+#writer-room-root .wr-btn{border-radius:var(--r);border:1px solid var(--ink);background:var(--ink);color:var(--paper);font-weight:600;font-size:14px;padding:9px 16px;transition:background-color .15s,border-color .15s,transform .15s}
+#writer-room-root .wr-btn:hover{background:var(--pen);border-color:var(--pen);filter:none;transform:none}
+#writer-room-root .wr-btn:active{transform:translateY(1px)}
+#writer-room-root .wr-btn.secondary{background:transparent;color:var(--ink);border-color:var(--rule2)}
+#writer-room-root .wr-btn.secondary:hover{border-color:var(--ink);background:transparent;color:var(--ink)}
+#writer-room-root .wr-btn.danger{background:transparent;color:var(--pen);border-color:var(--pen)}
+#writer-room-root .wr-btn.danger:hover{background:var(--pen);color:var(--paper)}
+
+/* Fields: underline like the studio form; text areas keep a box */
+.wr-field label{font-size:13px;font-weight:600;color:var(--pencil)}
+.wr-field input,.wr-field select{border:0;border-bottom:1px solid var(--rule2);border-radius:0;background:transparent;padding:8px 2px;font-size:15px;font-family:var(--serif)}
+.wr-field select{font-family:var(--sans)}
+.wr-field input:hover,.wr-field select:hover{border-bottom-color:var(--ink)}
+.wr-field textarea{border-radius:var(--r);background:var(--paper);font-family:var(--serif);font-size:15px}
+.wr-field input:focus,.wr-field select:focus,.wr-field textarea:focus{border-color:var(--pen);box-shadow:none}
+.wr-project-toolbar select{border-radius:var(--r)}
+.wr-field input[type=range]{border:0}
+
+/* Selection = highlighter, not a red wash */
+.wr-character-card.active,.wr-mood-choice:has(input:checked){background:color-mix(in srgb,var(--hl) 45%,var(--paper))!important;border-color:var(--ink)!important;box-shadow:none}
+.wr-character-card{border-radius:var(--r)!important;background:var(--paper)!important}
+
+/* Status colors come from the theme tokens */
+.wr-status.warn{border-color:var(--hl);background:color-mix(in srgb,var(--hl) 25%,var(--paper))}
+.wr-status.success{border-color:var(--good)}
+.wr-check-icon.done{color:var(--good)}
+.wr-calendar-cell.has-task{background:color-mix(in srgb,var(--hl) 22%,var(--paper));border-color:var(--rule2)}
+.wr-calendar-task{background:var(--paper);border:1px solid var(--rule)}
+.wr-combo-premise{border-radius:0;background:var(--paper)}
+.wr-table th{background:transparent;border-bottom:1px solid var(--ink);color:var(--pencil);font-weight:600}
+.wr-table td{border-bottom-style:dashed}
+.wr-axis-label{font-family:var(--sans)}
+
+/* Analyzer OCR box and quality warning */
+.analyzer-image-box,.quality-warning{border-radius:var(--r)}
+@media (prefers-reduced-motion:reduce){#writer-room-root .wr-tab{transition:none}}
+
+/* Fix: the text-field rule also hit checkboxes and file pickers inside .rw-input */
+.rw-input input[type=file],.rw-input input[type=checkbox]{flex:0 0 auto;min-width:0;padding:0;border:0;background:none}
+.rw-input input[type=checkbox]{width:16px;height:16px;margin:0}
+.rw-html-import .rw-input{align-items:center}
+.rw-html-import .rw-input button{flex:0 0 auto}
+#writer-room-root .wr-tab,#writer-room-root .wr-tab.active{background-color:transparent!important}
