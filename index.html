@@ -372,6 +372,18 @@ summary::marker{color:var(--pen)}
       <div id="rw-stats" class="rw-stats"></div>
       <div id="rw-library" class="rw-list"></div>
     </section>
+    <section class="rw-card">
+      <span class="tag">WHOLE STORY</span>
+      <h2>แกะทั้งเรื่อง</h2>
+      <p>สรุปทีละตอน ตัวละคร ใครเกี่ยวข้องกับใคร และวิธีเขียนแบบนี้ ใช้ตอนที่ติ๊กเลือกในคลังด้านบน (ถ้าไม่ติ๊กจะใช้ทุกตอนที่อ่านได้) หรือวางทั้งเรื่องไว้ที่นี่ ระบบแยกตอนจากหัวข้อ “ตอนที่ N” ให้เอง ประมวลผลในเบราว์เซอร์ทั้งหมด</p>
+      <label for="rw-story-names">ชื่อตัวละคร (ไม่บังคับ คั่นด้วยจุลภาค)</label>
+      <input id="rw-story-names" type="text" placeholder="เช่น พิมพ์ดาว, ภูผา, ธาม" style="width:100%;padding:8px 12px;border:1px solid var(--rule2);border-radius:4px;background:var(--paper);color:var(--ink);font:inherit">
+      <label for="rw-story-text">วางทั้งเรื่อง (ไม่บังคับ)</label>
+      <textarea id="rw-story-text" style="min-height:160px" placeholder="วางหลายตอนต่อกัน โดยมีหัวข้อ เช่น ตอนที่ 1 แล้วตามด้วยเนื้อหา หรือเว้นว่างเพื่อใช้ตอนจากคลัง"></textarea>
+      <div class="row" style="margin-top:10px"><button id="rw-story-go" type="button">แกะทั้งเรื่อง</button></div>
+      <div id="rw-story-status" class="rw-status" role="status" aria-live="polite"></div>
+      <div id="rw-story-out" class="story-out"></div>
+    </section>
   </div>
 
   <div id="p-writer" hidden>
@@ -749,6 +761,77 @@ function extractHtmlFromMhtml(source){
     if(/<html[\s>]|<!doctype\s+html/i.test(decoded))return {html:decoded,contentLocation:location,encoding,charset};
   }
   throw new Error("ไม่พบส่วน text/html ในไฟล์ MHTML นี้");
+}
+
+// ===== Whole-story analysis: per-chapter summaries, cast across chapters, who acts on whom =====
+// Splits one pasted story at headings such as "ตอนที่ 3" or "บทที่ 3"; with fewer than two headings the text stays one chapter.
+function splitChapters(raw){
+  const text = String(raw || "").replace(/\r/g, "").trim();
+  const heads = [...text.matchAll(/^[ \t]*((?:ตอนที่|บทที่|ตอน|บท|chapter|ep\.?)[ \t]*\d+[^\n]{0,80})$/gim)];
+  if (heads.length < 2) return text ? [{title: "ทั้งเรื่อง", text}] : [];
+  const out = heads.map((h, i) => ({title: h[1].trim(), text: text.slice(h.index + h[0].length, heads[i + 1]?.index ?? text.length).trim()}));
+  const intro = text.slice(0, heads[0].index).trim();
+  return (intro.length >= 200 ? [{title: "บทนำ", text: intro}] : []).concat(out).filter(c => c.text.length >= 40);
+}
+
+const ACT = new RegExp(SAY.map(esc).join("|"));
+// `given` = names the user typed; they replace the guessed cast, which is the weakest part of the analysis.
+function analyzeStory(chapters, given = []){
+  const chs = chapters.filter(c => c.text && c.text.trim()).map((c, i) => ({title: c.title || "ตอนที่ " + (i + 1), text: c.text, a: analyze(c.text)}));
+  if (!chs.length) return null;
+  // Keep a name only if it acts often enough across the story, and drop a name that merely contains a shorter kept name (the segmenter glues "ดู"+"ภูผา").
+  const acts = new Map();
+  chs.forEach(c => c.a.cast.forEach(x => acts.set(x.name, (acts.get(x.name) || 0) + x.acts + x.lines)));
+  const kept = [...acts].filter(([n, v]) => v >= 3 && v / sum(chs.map(c => count(c.text, n))) >= 0.3).map(x => x[0]);
+  const names = given.length ? given : kept.filter(n => !kept.some(m => m !== n && m.length >= 2 && n.includes(m)));
+  const cast = names.map(name => {
+    const per = chs.map(c => count(c.text, name));
+    return {name, total: sum(per), chapters: per.flatMap((n, i) => n ? [i] : [])};
+  }).sort((x, y) => y.total - x.total);
+
+  // Two names in one paragraph = they share a scene. A verb between them (A ... verb ... B) = A acts toward B.
+  const pairs = new Map();
+  chs.forEach((c, ci) => c.text.split(/\n+/).forEach(p => {
+    const here = names.filter(n => p.includes(n));
+    for (const A of here) for (const B of here) {
+      if (A >= B) continue;
+      const e = pairs.get(A + "\u0000" + B) || {a: A, b: B, scenes: 0, aToB: 0, bToA: 0, chapters: new Set()};
+      const dir = (x, y) => { const i = p.indexOf(x), j = p.indexOf(y, i + 1); return i >= 0 && j > i && j - i <= 40 && ACT.test(p.slice(i + x.length, j)); };
+      e.scenes++; e.chapters.add(ci); if (dir(A, B)) e.aToB++; if (dir(B, A)) e.bToA++;
+      pairs.set(A + "\u0000" + B, e);
+    }
+  }));
+  const links = [...pairs.values()].filter(e => e.scenes >= 2).sort((x, y) => y.scenes - x.scenes).slice(0, 8).map(e => ({...e, chapters: [...e.chapters]}));
+
+  const seen = new Set();
+  const perChapter = chs.map((c, i) => {
+    const a = c.a, top = topFeels(a)[0]?.[0] || "เรียบ";
+    const here = cast.filter(x => x.chapters.includes(i)).map(x => x.name);
+    const fresh = here.filter(n => !seen.has(n)); here.forEach(n => seen.add(n));
+    const prev = chs[i - 1]?.a, power = sum(a.curve.map(x => x.total)), prevPower = prev ? sum(prev.curve.map(x => x.total)) : 0;
+    const how = [
+      "เปิดตอนด้วย" + a.opens + " จังหวะ" + pace(a) + " บทพูดราว " + pct(a.dialogue) + " ของตอน",
+      TIPS[top]?.p ? "ฟีลหลัก \"" + top + "\": " + TIPS[top].p : "",
+      "วางจุดอารมณ์สูงสุดไว้" + a.peak + (a.ends === "ทิ้งคำถาม/ค้างไว้" ? " แล้วปิดแบบค้างไว้ให้อยากอ่านต่อ" : " แล้วปิดด้วย" + a.ends),
+      fresh.length ? "แนะนำตัวละครใหม่ในตอนนี้: " + fresh.join(", ") : "",
+      prev ? (power > prevPower * 1.25 ? "อารมณ์เข้มขึ้นกว่าตอนก่อน (ตอนไต่ระดับ)" : power < prevPower * 0.75 ? "อารมณ์เบาลงกว่าตอนก่อน (ตอนพักหายใจ)" : "") : ""
+    ].filter(Boolean);
+    return {title: c.title, chars: a.chars, summary: a.summary, feel: top, power, peak: a.peak, opens: a.opens, ends: a.ends, here, fresh, how};
+  });
+
+  const feelTotal = {};
+  chs.forEach(c => Object.entries(c.a.feel).forEach(([k, v]) => feelTotal[k] = (feelTotal[k] || 0) + v));
+  const topFeel = Object.entries(feelTotal).filter(([, v]) => v > 0).sort((x, y) => y[1] - x[1]).slice(0, 2).map(x => x[0]);
+  const n = chs.length, hooks = chs.filter(c => c.a.ends === "ทิ้งคำถาม/ค้างไว้").length;
+  const biggest = perChapter.reduce((m, c, i) => c.power > perChapter[m].power ? i : m, 0);
+  const recipe = [
+    n < 2 ? "มีตอนเดียว จึงยังดูโครงทั้งเรื่องไม่ได้ ใส่ตอนเพิ่มเพื่อให้เห็นการไต่ระดับอารมณ์" : "จุดอารมณ์สูงสุดอยู่ที่ \"" + perChapter[biggest].title + "\" (ราว " + Math.round((biggest + 1) / n * 100) + "% ของเรื่อง) วางจังหวะไต่ขึ้นไปหาจุดนี้",
+    "ความยาวตอนเฉลี่ย " + Math.round(sum(chs.map(c => c.a.chars)) / n).toLocaleString() + " ตัวอักษร บทพูดเฉลี่ย " + pct(sum(chs.map(c => c.a.dialogue)) / n),
+    "ปิดตอนแบบค้างไว้ " + hooks + " จาก " + n + " ตอน" + (hooks / n >= 0.5 ? " ผู้เขียนใช้การทิ้งท้ายเป็นแรงดึงให้อ่านต่อ" : " ตอนส่วนใหญ่จบเรียบ"),
+    cast.length ? "มีตัวละครที่จับได้ " + cast.length + " ตัว ตัวที่ถูกพูดถึงมากที่สุดคือ " + cast.slice(0, 3).map(x => x.name).join(", ") + " (ตัวเลขนี้นับคำที่ดูเหมือนชื่อ ไม่ยืนยันว่าเป็นตัวละครจริง)" : "",
+    topFeel.length ? "ฟีลเด่นของทั้งเรื่อง: " + topFeel.join(" + ") + " · " + (TIPS[topFeel[0]]?.p || "") : ""
+  ].filter(Boolean);
+  return {count: n, chars: sum(chs.map(c => c.a.chars)), cast, links, perChapter, topFeel, recipe, guessed: !given.length};
 }
 
 // ===== UI =====
@@ -1817,6 +1900,50 @@ rwGet("rw-merge-selected").onclick = () => {
   };
   try{localStorage.setItem(RW_IMPORT_KEY,JSON.stringify([collection,...all]));renderReadAWriteLibrary();status.textContent="สร้างชุดรวมแล้ว รายการต้นฉบับ "+picked.length+" รายการยังอยู่ครบ";}
   catch(_){status.textContent="บันทึกชุดรวมไม่สำเร็จ พื้นที่จัดเก็บอาจเต็ม กรุณาส่งออก JSON หรือลบรายการเก่า";}
+};
+// ===== Whole-story report (library chapters or pasted text) =====
+function storyChapters(){
+  const all = readAWriteItems().filter(x => x.kind !== "collection" && !x.reviewOnly);
+  const ids = [...document.querySelectorAll("[data-rw-select]:checked")].map(x => x.dataset.rwSelect);
+  let picked = ids.length ? ids.map(id => all.find(x => x.id === id)).filter(Boolean) : all.slice().reverse();
+  const num = x => +(String(x.chapterTitle).match(/\d+/)?.[0] ?? NaN);
+  if (!ids.length && picked.length && picked.every(x => !isNaN(num(x)))) picked = picked.sort((a, b) => num(a) - num(b));
+  return picked.map(x => ({title: x.chapterTitle, text: x.text}));
+}
+function renderWholeStory(r, out){
+  const max = Math.max(...r.perChapter.map(c => c.power)) || 1;
+  const linkText = l => {
+    const dir = l.aToB >= 2 && l.aToB > l.bToA * 1.5 ? " · " + l.a + " เป็นฝ่ายกระทำต่อ" + l.b + "มากกว่า (" + l.aToB + ":" + l.bToA + ")"
+      : l.bToA >= 2 && l.bToA > l.aToB * 1.5 ? " · " + l.b + " เป็นฝ่ายกระทำต่อ" + l.a + "มากกว่า (" + l.bToA + ":" + l.aToB + ")" : "";
+    return l.a + " ↔ " + l.b + ": อยู่ฉากเดียวกัน " + l.scenes + " ย่อหน้า (ตอนลำดับที่ " + l.chapters.map(i => i + 1).join(", ") + ")" + dir;
+  };
+  out.replaceChildren(
+    el("div", {}, el("span", {class: "tag"}, "ภาพรวมทั้งเรื่อง"),
+      el("p", {}, r.count + " ตอน · " + r.chars.toLocaleString() + " ตัวอักษร · ตัวละคร " + r.cast.length + " ตัว"),
+      r.guessed ? el("p", {class: "note"}, "รายชื่อตัวละครมาจากการเดาคำที่ถูกพูดถึงซ้ำ อาจมีคำที่ไม่ใช่ชื่อปนมา ใส่ชื่อตัวละครในช่องด้านบนเพื่อให้ตารางความสัมพันธ์แม่นขึ้น") : null),
+    sec("อารมณ์ไล่ตามตอน", el("div", {class: "arc", role: "img", "aria-label": "ความเข้มอารมณ์ของแต่ละตอน"},
+      r.perChapter.map((c, i) => el("div", {title: c.title + " · " + c.feel}, el("i", {style: "height:" + Math.max(3, Math.round(c.power / max * 100)) + "%"}), el("span", {}, i + 1)))),
+      el("p", {class: "note"}, "ความสูง = ความเข้มของคำอารมณ์ในตอนนั้น เทียบกับตอนที่เข้มที่สุด ตัวเลขใต้แท่ง = ลำดับตอน")),
+    r.cast.length ? sec("ตัวละคร", el("div", {class: "chips"}, r.cast.map(c => el("span", {}, c.name + " ×" + c.total + " · " + c.chapters.length + " ตอน")))) : null,
+    sec("ใครเกี่ยวข้องกับใคร", r.links.length ? list(r.links.map(linkText)) : el("p", {class: "note"}, "ยังไม่พบคู่ตัวละครที่อยู่ฉากเดียวกันอย่างน้อย 2 ย่อหน้า ลองใส่ชื่อตัวละครในช่องด้านบน"),
+      el("p", {class: "note"}, "ดูจากชื่อที่อยู่ย่อหน้าเดียวกัน และคำกริยา (มอง พูด เดิน ฯลฯ) ที่อยู่ระหว่างสองชื่อ ไม่ได้เข้าใจความหมายของเรื่อง")),
+    sec("สรุปทีละตอนและวิธีเขียน", el("div", {}, r.perChapter.map((c, i) => el("details", i < 2 ? {open: ""} : {},
+      el("summary", {}, (i + 1) + ". " + c.title + " · ฟีล " + c.feel),
+      c.summary.length ? el("ol", {class: "summary"}, c.summary.map(x => el("li", {}, x))) : el("p", {class: "note"}, "ข้อความสั้นเกินไปสำหรับสรุป"),
+      c.here.length ? el("p", {class: "note"}, "ตัวละครในตอนนี้: " + c.here.join(", ")) : null,
+      el("p", {}, el("b", {}, "ถ้าจะเขียนตอนแบบนี้")), list(c.how))))),
+    sec("ถ้าจะเขียนทั้งเรื่องแบบนี้", list(r.recipe), el("p", {class: "note"}, "สรุปย่อเป็นประโยคเด่นที่ดึงจากต้นฉบับ ไม่ได้เรียบเรียงใหม่ และคำแนะนำมาจากตัวเลขที่นับได้ ไม่ใช่การเข้าใจเนื้อเรื่อง"))
+  );
+}
+$("rw-story-go").onclick = () => {
+  const status = $("rw-story-status"), out = $("rw-story-out"), pasted = $("rw-story-text").value.trim();
+  const given = $("rw-story-names").value.split(/[,，\n]/).map(x => x.trim()).filter(Boolean);
+  if (pasted) { const q = inspectTextQuality(pasted); if (!q.ok) { status.textContent = "ข้อความที่วางดูไม่สมบูรณ์: " + q.message; return; } }
+  const chapters = pasted ? splitChapters(pasted) : storyChapters();
+  if (!chapters.length) { status.textContent = "ยังไม่มีตอนให้แกะ ติ๊กตอนในคลัง หรือวางทั้งเรื่องในช่องด้านบน"; return; }
+  const r = analyzeStory(chapters, given);
+  status.textContent = pasted && chapters.length === 1 ? "ไม่พบหัวข้อ “ตอนที่ N” ในข้อความ จึงวิเคราะห์เป็นตอนเดียว" : "";
+  renderWholeStory(r, out); out.scrollIntoView({behavior: "smooth", block: "start"});
 };
 function extractSavedReadAWriteHtml(source){
   const doc=new DOMParser().parseFromString(String(source||""),"text/html");
