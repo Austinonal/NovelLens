@@ -603,19 +603,19 @@
       }
     });
     const external=h("div","wr-inline");
-    const externalSearch=(label,base)=>btn(label,()=>{
+    const externalSearch=(label,makeUrl)=>btn(label,()=>{
       const name=query.node.value.trim();if(!name){searchStatus.textContent="ใส่ชื่อก่อนเปิดการค้นหา";return;}
-      window.open(base+encodeURIComponent(name),"_blank","noopener,noreferrer");
+      window.open(makeUrl(encodeURIComponent(name)),"_blank","noopener,noreferrer");
     },"secondary");
-    add(external,externalSearch("ค้นเว็บทั่วไป","https://www.google.com/search?q="),
-      externalSearch("ค้นข่าว/บทสัมภาษณ์","https://www.google.com/search?q="),
-      externalSearch("ค้น Wikidata","https://www.wikidata.org/w/index.php?search="));
+    add(external,externalSearch("ค้นเว็บทั่วไป",q=>"https://www.google.com/search?q="+q),
+      externalSearch("ค้นข่าว/บทสัมภาษณ์",q=>"https://www.google.com/search?tbm=nws&q="+q),
+      externalSearch("ค้น Wikidata",q=>"https://www.wikidata.org/w/index.php?search="+q));
     searchCard.append(query.wrap,searchBtn,external,searchStatus,results);
     area.append(searchCard);
 
     const sourceCard=card("เพิ่มหลายแหล่งพร้อมกัน","วาง URL หลายบรรทัดได้จากทุกเว็บไซต์ ระบบจะบันทึกลิงก์ให้ ส่วนเว็บที่ไม่เปิด CORS ต้องคัดข้อความสำคัญที่คุณมีสิทธิ์ใช้มาใส่เอง");
     const urls=textareaField("URL อ้างอิง (หนึ่งลิงก์ต่อบรรทัด)","","","https://example.com/biography\nhttps://example.com/interview",4);
-    const manualTitle=field("ชื่อชุดแหล่งอ้างอิง","","",{placeholder:"เช่น บุคลิกและบทสัมภาษณ์"});
+    const manualTitle=field("ชื่อชุดแหล่งอ้างอิง","",()=>{},{placeholder:"เช่น บุคลิกและบทสัมภาษณ์"});
     const excerpt=textareaField("ข้อความสรุป/บันทึกจากแหล่งที่คุณตรวจแล้ว","","","จดประเด็นที่เห็นซ้ำหลายแหล่ง รวมทั้งข้อขัดแย้งที่ควรตรวจเพิ่ม",4);
     sourceCard.append(urls.wrap,manualTitle.wrap,excerpt.wrap,btn("บันทึกแหล่งอ้างอิงทั้งหมด",()=>{
       const linkLines=urls.node.value.split(/\n+/).map(x=>x.trim()).filter(Boolean);
