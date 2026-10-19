@@ -132,6 +132,7 @@
   // In-browser OCR for image files the user owns or is authorized to process.
   const ocrButton = document.getElementById("analyzer-image-ocr");
   const ocrOutput = document.getElementById("analyzer-image-output");
+  const ocrQualityRoot = document.getElementById("analyzer-image-quality");
   const ocrRights = document.getElementById("analyzer-image-rights");
   const ocrLanguage = document.getElementById("analyzer-image-language");
   const ocrProgressWrap = document.getElementById("analyzer-image-progress");
@@ -196,7 +197,7 @@
     return ocrLibraryPromise;
   }
 
-  function makeOcrCanvas(item) {
+  function makeOcrCanvas(item, mode = "balanced") {
     const image = item.image, preview = item.canvas, crop = item.crop;
     let sx = 0, sy = 0, sw = image.naturalWidth, sh = image.naturalHeight;
     if (crop) {
@@ -211,18 +212,101 @@
       sw = clamp(sw, 1, image.naturalWidth - sx);
       sh = clamp(sh, 1, image.naturalHeight - sy);
     }
-    const scale = Math.min(3, Math.sqrt(14000000 / Math.max(1, sw * sh)));
+    // The retry pass is capped lower to keep pixel processing responsive on ordinary laptops.
+    const pixelBudget = mode === "binary" ? 8000000 : 14000000;
+    const scale = Math.min(3, Math.sqrt(pixelBudget / Math.max(1, sw * sh)));
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(sw * scale));
     canvas.height = Math.max(1, Math.round(sh * scale));
-    const context = canvas.getContext("2d", { alpha: false });
+    const context = canvas.getContext("2d", { alpha: false, willReadFrequently: mode === "binary" });
     if (!context) throw new Error("เตรียมภาพสำหรับ OCR ไม่สำเร็จ");
     context.fillStyle = "#fff";
     context.fillRect(0, 0, canvas.width, canvas.height);
-    context.filter = "grayscale(1) contrast(1.18)";
+    context.filter = mode === "binary" ? "grayscale(1) contrast(1.45) brightness(1.04)" : "grayscale(1) contrast(1.18)";
     context.drawImage(image, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
     context.filter = "none";
+
+    if (mode === "binary") {
+      const frame = context.getImageData(0, 0, canvas.width, canvas.height);
+      const pixels = frame.data, histogram = new Uint32Array(256);
+      const total = pixels.length / 4;
+      let totalLuma = 0;
+      for (let i = 0; i < pixels.length; i += 4) {
+        const lum = Math.round(0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2]);
+        histogram[lum]++; totalLuma += lum;
+      }
+      let backgroundCount = 0, backgroundSum = 0, bestVariance = -1, threshold = 127;
+      for (let t = 0; t < 256; t++) {
+        backgroundCount += histogram[t];
+        if (!backgroundCount) continue;
+        const foregroundCount = total - backgroundCount;
+        if (!foregroundCount) break;
+        backgroundSum += t * histogram[t];
+        const meanBackground = backgroundSum / backgroundCount;
+        const meanForeground = (totalLuma - backgroundSum) / foregroundCount;
+        const variance = backgroundCount * foregroundCount * Math.pow(meanBackground - meanForeground, 2);
+        if (variance > bestVariance) { bestVariance = variance; threshold = t; }
+      }
+      let cornerSum = 0, cornerCount = 0;
+      const block = Math.max(2, Math.min(24, Math.floor(Math.min(canvas.width, canvas.height) * 0.025)));
+      for (const [ox, oy] of [[0,0],[canvas.width-block,0],[0,canvas.height-block],[canvas.width-block,canvas.height-block]]) {
+        for (let y = Math.max(0, oy); y < Math.min(canvas.height, oy + block); y += 2) {
+          for (let x = Math.max(0, ox); x < Math.min(canvas.width, ox + block); x += 2) {
+            const p = (y * canvas.width + x) * 4;
+            cornerSum += pixels[p]; cornerCount++;
+          }
+        }
+      }
+      const lightBackground = cornerCount ? cornerSum / cornerCount >= threshold : true;
+      for (let i = 0; i < pixels.length; i += 4) {
+        const lum = pixels[i];
+        const value = lightBackground ? (lum > threshold ? 255 : 0) : (lum > threshold ? 0 : 255);
+        pixels[i] = pixels[i + 1] = pixels[i + 2] = value;
+        pixels[i + 3] = 255;
+      }
+      context.putImageData(frame, 0, 0);
+    }
     return canvas;
+  }
+
+  function normalizeOcrText(value) {
+    return String(value || "").replace(/\r\n?/g, "\n").normalize("NFC")
+      .replace(/[ \t]+\n/g, "\n").replace(/\n[ \t]+/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
+
+  function scoreOcrCandidate(text, confidence) {
+    const value = normalizeOcrText(text), chars = Array.from(value);
+    const nonSpace = chars.filter(ch => !/\s/u.test(ch));
+    const textUnits = chars.filter(ch => /[\p{L}\p{M}\p{N}]/u.test(ch)).length;
+    const readableRatio = textUnits / (nonSpace.length || 1);
+    const replacement = (value.match(/\uFFFD/g) || []).length;
+    const longRuns = (value.match(/(.)\1{7,}/gu) || []).length;
+    const coverage = Math.min(1, textUnits / 140);
+    const certainty = Number.isFinite(Number(confidence)) ? Number(confidence) : 0;
+    return {text:value, confidence:certainty, chars:chars.length,
+      score:certainty * 0.72 + readableRatio * 18 + coverage * 12 - replacement * 8 - longRuns * 5};
+  }
+
+  function renderOcrQuality(pages) {
+    if (!ocrQualityRoot) return;
+    ocrQualityRoot.replaceChildren();
+    ocrQualityRoot.hidden = !pages || !pages.length;
+    if (!pages || !pages.length) return;
+    const heading = document.createElement("strong");
+    heading.textContent = "รายงานการอ่านแยกตามภาพ";
+    ocrQualityRoot.append(heading);
+    const list = document.createElement("ul");
+    for (const page of pages) {
+      const row = document.createElement("li");
+      row.textContent = page.name + " — " + page.chars.toLocaleString() + " ตัวอักษร · ความมั่นใจ " +
+        page.confidence + "%" + (page.attempts > 1 ? " · ทดลอง 2 วิธี" : "") +
+        (page.low ? " · ควรตรวจด้วยตา" : " · สัญญาณ OCR ปกติ");
+      list.append(row);
+    }
+    ocrQualityRoot.append(list);
+    const note = document.createElement("p");
+    note.textContent = "ความมั่นใจเป็นคะแนนจาก OCR ไม่ได้หมายความว่าทุกคำถูกต้อง ควรตรวจเทียบชื่อเฉพาะ ตัวเลข คำพูด และบรรทัดท้ายของทุกภาพ";
+    ocrQualityRoot.append(note);
   }
 
   function mergeOcrSegments(parts) {
@@ -257,6 +341,7 @@
     }
 
     ocrBusy = true;
+    renderOcrQuality([]);
     ocrButton.disabled = true;
     if (ocrProgressWrap) ocrProgressWrap.hidden = false;
     if (ocrProgress) ocrProgress.style.width = "0%";
@@ -308,17 +393,25 @@
         }
         if (!ocrWorker) throw new Error("ตัวอ่าน OCR ถูกหยุดหลังหมดเวลารอ กรุณาลองอีกครั้ง");
         ocrWorkerLanguage = language;
+        try {
+          await withTimeout(ocrWorker.setParameters({
+            tessedit_pageseg_mode: api.PSM && api.PSM.SINGLE_BLOCK !== undefined ? api.PSM.SINGLE_BLOCK : 6,
+            preserve_interword_spaces: "1",
+            user_defined_dpi: "300"
+          }), 20000, "ตั้งค่าการอ่าน OCR ใช้เวลานานเกินไป");
+        } catch (_) {
+          say("ใช้ค่า OCR เริ่มต้นของเครื่องอ่านต่อไป");
+        }
       }
 
       const recognizedSegments = [];
-      let confidenceTotal = 0, confidenceCount = 0;
-      for (let index = 0; index < pending.length; index++) {
-        const item = pending[index];
-        say("กำลังอ่านภาพ " + (index + 1) + "/" + pending.length + " · " + item.name);
-        const canvas = makeOcrCanvas(item);
+      const pageReports = [];
+      let confidenceTotal = 0, confidenceCount = 0, retryCount = 0;
+      async function recognizeVariant(item, mode) {
+        const canvas = makeOcrCanvas(item, mode);
         try {
-          let result;
           const workerForThisPage = ocrWorker;
+          let result;
           try {
             result = await withTimeout(
               workerForThisPage.recognize(canvas),
@@ -332,24 +425,54 @@
             }
             throw error;
           }
-          const text = String(result && result.data && result.data.text || "").trim();
-          if (text) recognizedSegments.push(text);
-          const confidence = Number(result && result.data && result.data.confidence);
-          if (Number.isFinite(confidence)) { confidenceTotal += confidence; confidenceCount++; }
+          const data = result && result.data || {};
+          return scoreOcrCandidate(data.text || "", data.confidence);
         } finally {
           canvas.width = 0;
           canvas.height = 0;
         }
+      }
+
+      for (let index = 0; index < pending.length; index++) {
+        const item = pending[index];
+        say("กำลังอ่านภาพ " + (index + 1) + "/" + pending.length + " · " + item.name);
+        let selected = await recognizeVariant(item, "balanced");
+        let attempts = 1;
+        let selectedMode = "ภาพมาตรฐาน";
+        if (selected.confidence < 78 || selected.chars < 24) {
+          retryCount++;
+          say("ภาพ " + (index + 1) + " ความมั่นใจยังไม่สูง กำลังลองประมวลผลภาพอีกแบบ…");
+          const alternate = await recognizeVariant(item, "binary");
+          attempts = 2;
+          if (alternate.score > selected.score) {
+            selected = alternate;
+            selectedMode = "ขาวดำเพิ่มความต่างระดับ";
+          }
+        }
+        if (selected.text) recognizedSegments.push(selected.text);
+        confidenceTotal += selected.confidence; confidenceCount++;
+        pageReports.push({
+          name: item.name,
+          confidence: Math.round(selected.confidence),
+          chars: selected.chars,
+          attempts,
+          chosen: selectedMode,
+          low: selected.confidence < 70 || selected.chars < 24
+        });
         if (ocrProgress) ocrProgress.style.width = Math.round((index + 1) / pending.length * 100) + "%";
       }
       const text = mergeOcrSegments(recognizedSegments);
       if (!text) throw new Error("ไม่พบข้อความที่อ่านได้ ลองครอปให้เหลือเฉพาะตัวอักษรหรือใช้ภาพที่คมชัดกว่า");
-      ocrOutput.value = text;
+      ocrOutput.value = normalizeOcrText(text);
       ocrOutput.dispatchEvent(new Event("input", { bubbles: true }));
       const confidenceAverage = confidenceCount ? Math.round(confidenceTotal / confidenceCount) : null;
-      say("OCR เสร็จแล้ว " + pending.length + " ภาพ · " + text.length.toLocaleString() + " ตัวอักษร" +
+      renderOcrQuality(pageReports);
+      const lowCount = pageReports.filter(page => page.low).length;
+      say("OCR เสร็จแล้ว " + pending.length + " ภาพ · " + ocrOutput.value.length.toLocaleString() + " ตัวอักษร" +
         (confidenceAverage !== null ? " · ความมั่นใจเฉลี่ย " + confidenceAverage + "%" : "") +
-        " — ตรวจแก้ข้อความด้านล่างก่อนส่งไปวิเคราะห์");
+        (retryCount ? " · ทดลองประมวลผลซ้ำ " + retryCount + " ภาพ" : "") +
+        (lowCount ? " · มี " + lowCount + " ภาพที่ควรตรวจเทียบเป็นพิเศษ" : "") +
+        " — ตรวจข้อความกับภาพต้นฉบับก่อนส่งไปวิเคราะห์");
       if (ocrProgress) ocrProgress.style.width = "100%";
     } catch (error) {
       say("OCR ไม่สำเร็จ: " + String(error && error.message || error));
