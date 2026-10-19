@@ -10,7 +10,7 @@ const sample = main.match(/const SAMPLE_TEXT = (`[\s\S]*?`);/)[1];
 let netCalls = 0;
 const trip = () => { netCalls++; throw new Error("network call"); };
 const api = new Function("fetch", "XMLHttpRequest", "WebSocket", "EventSource", "navigator", engine + studio.split("// ===== Studio UI")[0] +
-  `;return {analyze, compare, count, generate, rollField, validate, similarity, storyText, inspectTextQuality, auditTextCompleteness, feelEvidence, classifyEvidence, LEAN, OPPOSITE, PLOTS, STRUCTURES, ENDINGS, SAMPLE_TEXT: ${sample}}`)(trip, trip, trip, trip, {sendBeacon: trip});
+  `;return {analyze, compare, count, generate, rollField, validate, similarity, storyText, inspectTextQuality, auditTextCompleteness, normalizeReadAWriteUrl, feelEvidence, classifyEvidence, LEAN, OPPOSITE, PLOTS, STRUCTURES, ENDINGS, SAMPLE_TEXT: ${sample}}`)(trip, trip, trip, trip, {sendBeacon: trip});
 
 // Analyzer
 const a = api.analyze(api.SAMPLE_TEXT);
@@ -33,6 +33,16 @@ for (const genre of Object.keys(api.PLOTS)) for (const structure of Object.keys(
   assert(r.outline.at(-1).chapters.endsWith("12"), "last beat reaches the last chapter");
 }
 assert.equal(api.generate({chars: [{}], plot: {}}), null, "needs at least one named character");
+
+// ReadAWrite URL normalization: percent-encoded routes are preserved, not mistaken for bad text.
+assert.equal(api.normalizeReadAWriteUrl("www.readawrite.com/a/abc%25chapter").includes("/a/abc%25chapter"), true, "percent-encoded URL path is retained");
+assert.equal(api.normalizeReadAWriteUrl("https://www.readawrite.com/a/%E0%B8%99%E0%B8%B4%E0%B8%A2%E0%B8%B2%E0%B8%A2").includes("%E0%B8%99"), true, "Thai percent-encoded path is retained");
+assert.equal(api.normalizeReadAWriteUrl("https%3A%2F%2Fwww.readawrite.com%2Fa%2Fstory%3Fchapter%3D2"), "https://www.readawrite.com/a/story?chapter=2", "outer percent-encoded URL is normalized");
+assert.equal(api.normalizeReadAWriteUrl("www.readawrite.com/a/story?x=1&amp;y=2"), "https://www.readawrite.com/a/story?x=1&y=2", "HTML-escaped query ampersand is normalized");
+assert.equal(api.normalizeReadAWriteUrl("[ReadAWrite](https://www.readawrite.com/a/story?x=1)"), "https://www.readawrite.com/a/story?x=1", "Markdown-wrapped URL is accepted");
+assert.equal(api.normalizeReadAWriteUrl("http://www.readawrite.com/a/story").startsWith("https://"), true, "ReadAWrite http URLs are upgraded to https");
+assert.throws(()=>api.normalizeReadAWriteUrl("https://notreadawrite.com/a/story"), /ReadAWrite/, "lookalike domains are rejected");
+assert.throws(()=>api.normalizeReadAWriteUrl("javascript:alert(1)"), /HTTP\/HTTPS/, "javascript URLs are rejected");
 
 // Input integrity and evidence checks
 assert(api.inspectTextQuality(api.SAMPLE_TEXT).ok, "readable Thai sample passes text quality guard");
