@@ -238,6 +238,21 @@ assert.throws(()=>writerUtils.buildSchedule({...writerProject,dueDate:""}), /ว
 assert.throws(()=>writerUtils.buildSchedule({...writerProject,writingDays:[]}), /วันเขียน/, "schedule requires at least one writing day");
 const fingerprint = writerUtils.analyzeReferenceText("She is observant, sarcastic, and curious.\nA thoughtful public profile.");
 assert(fingerprint.traits.includes("ช่างสังเกต") && fingerprint.traits.includes("อารมณ์ขันแห้ง/ประชด"), "reference analyzer extracts high-level traits from source notes");
+// Reference links -> characters
+{
+  const list = writerUtils.parseUrlList("https://a.example/x\nhttps://a.example/x  not a url\nftp://b.example/y\nhttps://c.example/z", 12);
+  assert.deepEqual(list.valid.map(x => x.url), ["https://a.example/x", "https://c.example/z"], "link list keeps valid unique http(s) links");
+  assert.equal(list.skipped, 5, "a duplicate, the three words of \"not a url\" and the ftp link are skipped");
+  assert(writerUtils.parseUrlList(Array.from({length: 13}, (_, i) => "https://a.example/" + i).join("\n"), 12).tooMany, "more than 12 links is flagged");
+  assert.equal(writerUtils.wikiApiUrl("https://en.wikipedia.org/wiki/Elizabeth_Bennet").startsWith("https://en.wikipedia.org/w/api.php?"), true, "wikipedia links use the CORS API");
+  assert(writerUtils.wikiApiUrl("https://en.wikipedia.org/wiki/Elizabeth_Bennet").includes("titles=Elizabeth%20Bennet") && writerUtils.wikiApiUrl("https://x.fandom.com/wiki/Foo").startsWith("https://x.fandom.com/api.php?"), "title is decoded and other wikis use /api.php");
+  assert.equal(writerUtils.wikiApiUrl("https://example.com/blog/post"), "", "ordinary pages have no wiki API");
+  const ok = writerUtils.characterFromSource({title: "ตัวอย่าง - Wikipedia", host: "th.wikipedia.org", url: "https://th.wikipedia.org/wiki/x", text: "She is observant, sarcastic, and curious. ".repeat(30)});
+  assert.equal(ok.name, "ตัวอย่าง", "site suffix is stripped from the title");
+  assert(ok.traits.includes("ช่างสังเกต") && ok.sourceUrls[0] === "https://th.wikipedia.org/wiki/x" && ok.backstory.length <= 301, "traits come from the text and only a short note is kept");
+  const failed = writerUtils.characterFromSource({title: "", host: "blocked.example", url: "https://blocked.example/a", text: "", error: "CORS"});
+  assert(failed.name === "blocked.example" && failed.notes.includes("อ่านหน้านี้อัตโนมัติไม่ได้") && failed.backstory === "", "an unreadable page still gives an empty character with its link");
+}
 const styleSample = ("ฉันนั่งอยู่ใต้แสงไฟ แล้วถามตัวเองว่าความจริงจะช่วยอะไรได้หรือไม่? " + '"เขาหัวเราะอย่างประชด" ' + "เสียงฝนยังดังอยู่\\n").repeat(5);
 const styleFingerprint = writerUtils.analyzeReferenceText(styleSample);
 assert(styleFingerprint.signals.averageSentenceLength > 0 && styleFingerprint.signals.averageParagraphLength > 0, "style scan reports sentence and paragraph metrics");
