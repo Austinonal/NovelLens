@@ -193,7 +193,7 @@ summary::marker{color:var(--pen)}
 .rw-input{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
 .rw-input input{flex:1;min-width:min(100%,260px);padding:11px 12px;border:1px solid var(--rule2);border-radius:7px;background:var(--desk);color:var(--ink);font:inherit}
 .rw-status{min-height:1.5em;color:var(--pen);font-size:14px}
-.rw-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.rw-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .rw-stat{background:var(--desk);border:1px solid var(--rule);padding:12px;border-radius:5px}
 .rw-stat b{display:block;font-family:var(--serif);font-size:24px}
 .rw-list{display:grid;gap:10px;margin-top:14px}
@@ -201,7 +201,8 @@ summary::marker{color:var(--pen)}
 .rw-item h3{margin:0;font-family:var(--serif);font-size:17px;overflow-wrap:anywhere}
 .rw-item p{margin:3px 0;color:var(--pencil);font-size:13px;overflow-wrap:anywhere}
 .rw-empty{border:1px dashed var(--rule2);padding:22px;text-align:center;color:var(--pencil)}
-@media(max-width:620px){.rw-stats{grid-template-columns:1fr}.rw-item{grid-template-columns:1fr}.rw-item .row{justify-content:flex-start}}
+@media(max-width:900px){.rw-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.rw-review-flag{color:var(--pen)!important;font-weight:700}\n.rw-json-import{display:inline-flex;align-items:center;border:1px solid var(--rule2);padding:7px 12px;border-radius:7px;cursor:pointer;font-size:14px}\n#rw-import-json{max-width:210px;min-width:160px;font-size:12px;color:var(--pencil)}\n@media(max-width:620px){.rw-stats{grid-template-columns:1fr}.rw-item{grid-template-columns:1fr}.rw-item .row{justify-content:flex-start}}
 
 </style>
   <link rel="stylesheet" href="./image-workspace.css">
@@ -350,7 +351,7 @@ summary::marker{color:var(--pen)}
     <section class="rw-card">
       <div class="row" style="justify-content:space-between">
         <div><span class="tag">LOCAL LIBRARY</span><h2>คลังข้อความที่นำเข้า</h2></div>
-        <div class="row"><button id="rw-merge-selected" class="ghost" type="button">รวมรายการที่เลือก</button><button id="rw-export" class="ghost" type="button">ส่งออก JSON</button><button id="rw-clear" class="ghost" type="button">ล้างคลัง</button></div>
+        <div class="row"><button id="rw-merge-selected" class="ghost" type="button">รวมรายการที่เลือก</button><button id="rw-export" class="ghost" type="button">ส่งออก JSON</button><label class="rw-json-import" for="rw-import-json">นำเข้า JSON</label><input id="rw-import-json" type="file" accept=".json,application/json" aria-label="นำเข้าข้อมูลสำรอง NovelLens JSON"><button id="rw-clear" class="ghost" type="button">ล้างคลัง</button></div>
       </div>
       <p class="note">เลือกหลายหน้า/หลายตอนตามลำดับที่ต้องการรวม (เลือกหน้าต้นก่อน แล้วหน้าถัดไป) จากนั้นกด “รวมรายการที่เลือก” รายการเดิมจะยังอยู่เหมือนเดิม</p>
       <div id="rw-stats" class="rw-stats"></div>
@@ -838,34 +839,139 @@ $("file-import").addEventListener("change", async e => {
 });
 
 // --- Receive chapter text from the bookmarklet ---
-const BOOKMARKLET = app => `javascript:(()=>{const APP=${JSON.stringify(app)};let t=String(getSelection()).trim();if(t.length<200){const m=new Map();document.querySelectorAll('p').forEach(p=>{const k=p.parentElement;m.set(k,(m.get(k)||0)+p.innerText.trim().length)});let b=null,n=0;m.forEach((v,k)=>{if(v>n){n=v;b=k}});if(!b||n<=200){alert('ไม่พบเนื้อเรื่องเป็นข้อความบนหน้านี้ ถ้าเว็บมีโหมดอ่านแบบ html ให้สลับไปโหมดนั้น หรือลากคลุมเนื้อเรื่องแล้วกดใหม่');return}t=b.innerText.trim()}const host=location.hostname;const links=[...document.querySelectorAll('a[href]')].filter(a=>/readawrite\\.com$/.test(new URL(a.href,location.href).hostname)&&/\\/a\\//.test(new URL(a.href,location.href).pathname));const storyLink=links.find(a=>a.href!==location.href&&!/ตอนที่|chapter|episode/i.test(a.innerText))?.href||location.href;const title=document.querySelector('h1')?.innerText.trim()||document.querySelector('meta[property="og:title"]')?.content||document.title;const w=window.open(APP,'_blank');const o=new URL(APP).origin;addEventListener('message',function f(e){if(e.source===w&&e.origin===o&&e.data==='novel-ready'){w.postMessage({type:'novel-text',text:t,title:document.title,chapterTitle:title,sourceUrl:location.href,storyUrl:storyLink,sourceHost:host,sourceFont:getComputedStyle(document.querySelector("article")||document.querySelector("main")||document.body).fontFamily},o);removeEventListener('message',f)}})})()`;
+function captureReadAWritePage(APP) {
+  const clean = s => String(s || "").replace(/\u00a0/g, " ").replace(/\r\n?/g, "\n").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  const visible = el => {
+    if (!el || !el.isConnected) return false;
+    const style = getComputedStyle(el);
+    return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity || 1) > 0 && el.getClientRects().length > 0;
+  };
+  const ignored = el => el.matches("script,style,noscript,template,svg,nav,footer,aside,button,input,textarea,select,option,[hidden],[aria-hidden='true'],[role='navigation'],[role='button'],[contenteditable='true'],[class*='comment'],[id*='comment'],[class*='recommend'],[class*='related'],[class*='toolbar']");
+  const visibleText = root => {
+    const out = [];
+    const blockTags = /^(ADDRESS|ARTICLE|BLOCKQUOTE|DIV|DL|DT|DD|FIGCAPTION|H[1-6]|LI|MAIN|P|PRE|SECTION|TR)$/;
+    const walk = node => {
+      if (node.nodeType === Node.TEXT_NODE) { out.push(node.nodeValue || ""); return; }
+      if (node.nodeType !== Node.ELEMENT_NODE) return;
+      const el = node;
+      if (ignored(el) || !visible(el)) return;
+      if (blockTags.test(el.tagName)) out.push("\n");
+      for (const child of el.childNodes) walk(child);
+      if (blockTags.test(el.tagName)) out.push("\n");
+    };
+    walk(root);
+    return clean(out.join(""));
+  };
+  const selection = clean(String(getSelection() || ""));
+  let text = "", method = "", chosenSelector = "";
+  if (selection.length >= 200) { text = selection; method = "selected-text"; chosenSelector = "browser-selection"; }
+  if (!text) {
+    const selectors = ["article","main","[role='main']","[class*='chapter-content']","[class*='chapter_content']","[class*='reader-content']","[class*='reader_content']","[class*='novel-content']","[id*='chapter']","[id*='reader']","[class*='content']","[id*='content']"];
+    const roots = new Map();
+    for (const selector of selectors) {
+      try {
+        for (const el of document.querySelectorAll(selector)) {
+          if (!visible(el) || roots.has(el)) continue;
+          const identity = (el.id || "") + " " + (typeof el.className === "string" ? el.className : "");
+          let priority = el.matches("article") ? 900 : 0;
+          if (el.matches("main,[role='main']")) priority += 250;
+          if (/chapter|reader|novel/i.test(identity)) priority += 700;
+          if (/content/i.test(identity)) priority += 200;
+          roots.set(el, { selector, priority });
+        }
+      } catch (_) {}
+    }
+    const paragraphs = [...document.querySelectorAll("p")].filter(p => visible(p) && clean(p.innerText || p.textContent).length >= 20);
+    const groups = new Map();
+    for (const p of paragraphs) {
+      const root = p.closest("article,main,[role='main'],[class*='chapter-content'],[class*='reader-content'],[class*='content']") || p.parentElement;
+      if (root && visible(root)) {
+        if (!groups.has(root)) groups.set(root, []);
+        groups.get(root).push(clean(p.innerText || p.textContent));
+      }
+    }
+    for (const [root, lines] of groups) if (!roots.has(root)) roots.set(root, { selector: "visible-paragraph-group", priority: 350, override: lines.join("\n") });
+    const candidates = [];
+    for (const [root, meta] of roots) {
+      const candidate = clean(meta.override || visibleText(root));
+      if (candidate.length < 80 || candidate.length > 250000) continue;
+      const useful = (candidate.match(/[\p{L}\p{M}\p{N}]/gu) || []).length / (candidate.length || 1);
+      if (useful < 0.45) continue;
+      const lines = candidate.split("\n").filter(x => x.trim());
+      const repeated = lines.length - new Set(lines).size;
+      candidates.push({ candidate, selector: meta.selector, score: candidate.length + meta.priority - repeated * 35 });
+    }
+    candidates.sort((a, b) => b.score - a.score);
+    if (candidates[0]) { text = candidates[0].candidate; method = "visible-page-text"; chosenSelector = candidates[0].selector; }
+  }
+  if (text.length < 80) {
+    alert("NovelLens: ยังตรวจพบข้อความที่มองเห็นได้ไม่มากพอ (" + text.length + " ตัวอักษร)\nลองลากเลือกเนื้อหาที่อ่านได้อย่างน้อยหนึ่งย่อหน้า แล้วกด bookmarklet อีกครั้ง หรือใช้ภาพที่คุณมีสิทธิ์ใช้งานกับ OCR");
+    return;
+  }
+  const host = location.hostname;
+  const title = document.querySelector("h1")?.innerText.trim() || document.querySelector("meta[property='og:title']")?.content || document.title;
+  const privateUseCount = (text.match(/[\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]/gu) || []).length;
+  const links = [...document.querySelectorAll("a[href]")].filter(a => {
+    try { const u = new URL(a.href, location.href); return /readawrite\.com$/.test(u.hostname) && /\/a\//.test(u.pathname); }
+    catch (_) { return false; }
+  });
+  const storyLink = links.find(a => a.href !== location.href && !/ตอนที่|chapter|episode/i.test(a.innerText))?.href || location.href;
+  const sourceFont = getComputedStyle(document.querySelector("article") || document.querySelector("main") || document.body).fontFamily;
+  const payload = { type:"novel-text", text, title:document.title, chapterTitle:title, sourceUrl:location.href, storyUrl:storyLink, sourceHost:host, sourceFont, captureMethod:method, captureSelector:chosenSelector, selectionLength:selection.length, capturedLength:text.length, privateUseCount, capturedAt:new Date().toISOString() };
+  const target = window.open(APP, "_blank");
+  if (!target) { alert("NovelLens: เบราว์เซอร์บล็อกหน้าต่างใหม่ ให้เปิด NovelLens ค้างไว้และอนุญาตป๊อปอัป แล้วลองอีกครั้ง"); return; }
+  const origin = new URL(APP).origin;
+  addEventListener("message", function handshake(e) {
+    if (e.source !== target || e.origin !== origin || e.data !== "novel-ready") return;
+    target.postMessage(payload, origin);
+    removeEventListener("message", handshake);
+  });
+}
+const BOOKMARKLET = app => "javascript:(" + captureReadAWritePage.toString() + ")(" + JSON.stringify(app) + ")";
 $("bm").href = BOOKMARKLET(location.href.split("#")[0]);
 $("bm").onclick = e => { e.preventDefault(); status.textContent = "ลากปุ่มนี้ไปไว้ที่แถบบุ๊กมาร์ก แล้วไปกดที่หน้าตอนนิยาย"; };
 addEventListener("message", e => {
   if (e.source !== window.opener || e.data?.type !== "novel-text") return;
   src.value = String(e.data.text || ""); updateCount();
-  isExample = false;
-  saveAnalysisSession(src.value);
+  isExample = false; saveAnalysisSession(src.value);
   const quality = inspectTextQuality(src.value);
+  const capture = Object.assign({}, e.data, {
+    reviewOnly: !quality.ok, qualityIssue: quality.issue || "",
+    captureDiagnostics: {
+      method: String(e.data.captureMethod || "bookmarklet"),
+      selector: String(e.data.captureSelector || ""),
+      selectedChars: Number(e.data.selectionLength || 0),
+      capturedChars: Number(e.data.capturedLength || src.value.length),
+      privateUseCount: Number(e.data.privateUseCount || quality.pua || 0),
+      privateUseRatio: Number(quality.puaRatio || 0),
+      sourceFont: String(e.data.sourceFont || "").slice(0, 120)
+    }
+  });
+  const item = typeof saveReadAWriteImport === "function" ? saveReadAWriteImport(capture) : null;
   if (!quality.ok) {
     showQualityWarning(quality, "ข้อความจาก Bookmarklet · ฟอนต์ต้นทาง: " + String(e.data.sourceFont || "ไม่ทราบ").slice(0, 100));
-    status.textContent = "ไม่ได้บันทึกข้อความนี้ เพราะตรวจพบอักขระที่อาจถูกแทนด้วยฟอนต์พิเศษ";
+    status.textContent = "ข้อความยังไม่ได้วิเคราะห์ แต่ได้เก็บฉบับตรวจทานในคลังแล้ว หากบันทึกสำเร็จจะระบุว่า “รอตรวจ”";
     const rwStatus = document.getElementById("rw-status");
-    if (rwStatus) rwStatus.textContent = "ไม่ได้เพิ่มเข้าคลัง: ข้อความที่ดึงมาอาจไม่ใช่ต้นฉบับที่อ่านได้";
+    if (rwStatus) rwStatus.textContent = item
+      ? "เก็บฉบับรอตรวจไว้แล้ว (" + quality.issue + ") · " + item.text.length.toLocaleString() + " ตัวอักษร — ไม่ถอดรหัสหรือวิเคราะห์จนกว่าจะมีข้อความอ่านได้"
+      : "เก็บฉบับรอตรวจไม่สำเร็จ ตรวจพื้นที่จัดเก็บเบราว์เซอร์";
+    if (typeof renderReadAWriteLibrary === "function") renderReadAWriteLibrary();
     return;
   }
   status.textContent = "ดึงมาแล้ว: " + String(e.data.title || "").slice(0, 80);
   run();
-  if (typeof saveReadAWriteImport === "function") {
-    const item = saveReadAWriteImport(e.data);
-    if (item) {
-      const rwStatus = document.getElementById("rw-status");
-      if (rwStatus) rwStatus.textContent = "เก็บตอนในคลังแล้ว: " + item.chapterTitle + " · " + item.text.length.toLocaleString() + " ตัวอักษร";
-      if (typeof renderReadAWriteLibrary === "function") renderReadAWriteLibrary();
-    }
-  }
+  const rwStatus = document.getElementById("rw-status");
+  if (rwStatus) rwStatus.textContent = item
+    ? "เก็บตอนในคลังแล้ว: " + item.chapterTitle + " · " + item.text.length.toLocaleString() + " ตัวอักษร"
+    : "วิเคราะห์แล้ว แต่บันทึกเข้าคลังไม่สำเร็จ ตรวจ URL และพื้นที่จัดเก็บ";
+  if (typeof renderReadAWriteLibrary === "function") renderReadAWriteLibrary();
 });
-if (window.opener) window.opener.postMessage("novel-ready", "*");
+if (window.opener) {
+  const notifyNovelReady = () => { try { if (window.opener) window.opener.postMessage("novel-ready", "*"); } catch (_) {} };
+  notifyNovelReady();
+  setTimeout(notifyNovelReady, 300);
+  setTimeout(notifyNovelReady, 900);
+}
 
 const savedAnalysisSession = restoreAnalysisSession();
 if (savedAnalysisSession) { src.value = savedAnalysisSession.text; isExample = false; status.textContent = "กู้คืนข้อความวิเคราะห์จากการใช้งานครั้งก่อนแล้ว"; }
@@ -1476,20 +1582,35 @@ function saveReadAWriteImport(data) {
   const text = String(data.text || "").trim();
   const sourceUrl = String(data.sourceUrl || "");
   const quality = inspectTextQuality(text);
-  if (!quality.ok) {
+  const reviewOnly = Boolean(data.reviewOnly || !quality.ok);
+  if (text.length < (reviewOnly ? 20 : 80) || !/^https?:\/\/(?:[^/]+\.)?readawrite\.com\//i.test(sourceUrl)) {
     const status = rwGet("rw-status");
-    if (status) status.textContent = "ไม่ได้บันทึก: ข้อความไม่สมบูรณ์หรือมีอักขระจากฟอนต์พิเศษ";
+    if (status) status.textContent = reviewOnly
+      ? "ยังเก็บฉบับรอตรวจไม่ได้: ข้อความสั้นเกินไปหรือ URL ไม่ใช่หน้าตอน ReadAWrite"
+      : "ยังเก็บไม่ได้: ข้อความสั้นเกินไปหรือ URL ไม่ใช่หน้าตอน ReadAWrite";
     return null;
   }
-  if (text.length < 80 || !/^https?:\/\/(?:[^/]+\.)?readawrite\.com\//i.test(sourceUrl)) return null;
   const items = readAWriteItems();
-  const old = items.find(x => x.sourceUrl === sourceUrl && x.kind !== "collection");
+  const old = items.find(x => x.sourceUrl === sourceUrl && x.kind !== "collection" && Boolean(x.reviewOnly) === reviewOnly);
   const mergedText = old ? mergeCaptureText(String(old.text || ""), text) : text;
+  const rawDiag = data.captureDiagnostics && typeof data.captureDiagnostics === "object" ? data.captureDiagnostics : {};
+  const diagnostics = {
+    method: String(rawDiag.method || data.captureMethod || "bookmarklet").slice(0,80),
+    selector: String(rawDiag.selector || data.captureSelector || "").slice(0,180),
+    selectedChars: Math.max(0,Number(rawDiag.selectedChars || data.selectionLength || 0)),
+    capturedChars: Math.max(0,Number(rawDiag.capturedChars || data.capturedLength || text.length)),
+    privateUseCount: Math.max(0,Number(rawDiag.privateUseCount || data.privateUseCount || quality.pua || 0)),
+    privateUseRatio: Math.max(0,Math.min(1,Number(rawDiag.privateUseRatio || quality.puaRatio || 0))),
+    sourceFont: String(rawDiag.sourceFont || data.sourceFont || "").slice(0,120)
+  };
   const item = {
     id: old?.id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 8)),
-    kind: "chapter",
-    sourceUrl, storyUrl: String(data.storyUrl || old?.storyUrl || sourceUrl), pageTitle: String(data.title || old?.pageTitle || ""),
-    chapterTitle: String(data.chapterTitle || data.title || old?.chapterTitle || "ตอนที่ไม่ทราบชื่อ"),
+    kind: "chapter", reviewOnly,
+    qualityIssue: reviewOnly ? String(data.qualityIssue || quality.issue || "needs-review").slice(0,80) : "",
+    captureDiagnostics: diagnostics,
+    sourceUrl, storyUrl: String(data.storyUrl || old?.storyUrl || sourceUrl),
+    pageTitle: String(data.title || old?.pageTitle || "").slice(0,300),
+    chapterTitle: String(data.chapterTitle || data.title || old?.chapterTitle || "ตอนที่ไม่ทราบชื่อ").slice(0,300),
     text: mergedText, chars: mergedText.length,
     captureCount: (old?.captureCount || 0) + (old && mergedText === String(old.text || "") ? 0 : 1),
     updatedAt: new Date().toISOString()
@@ -1519,14 +1640,64 @@ function renderReadAWriteLibrary() {
   const items = readAWriteItems(), list = rwGet("rw-library"), stats = rwGet("rw-stats");
   if (!list || !stats) return;
   const stories = new Set(items.map(x => x.storyUrl || x.sourceUrl));
-  stats.innerHTML = '<div class="rw-stat"><span>เรื่องที่พบ</span><b>' + stories.size + '</b></div><div class="rw-stat"><span>ตอนที่เก็บไว้</span><b>' + items.length + '</b></div><div class="rw-stat"><span>ตัวอักษรรวม</span><b>' + items.reduce((n,x)=>n+(x.text||"").length,0).toLocaleString() + '</b></div>';
+  const pendingReview = items.filter(x => x.reviewOnly).length;
+  stats.innerHTML =
+    '<div class="rw-stat"><span>เรื่องที่พบ</span><b>' + stories.size + '</b></div>' +
+    '<div class="rw-stat"><span>รายการในคลัง</span><b>' + items.length + '</b></div>' +
+    '<div class="rw-stat"><span>รอตรวจข้อความ</span><b>' + pendingReview + '</b></div>' +
+    '<div class="rw-stat"><span>ตัวอักษรรวม</span><b>' + items.reduce((n,x)=>n+(x.text||"").length,0).toLocaleString() + '</b></div>';
   if (!items.length) { list.innerHTML = '<div class="rw-empty">ยังไม่มีตอนในคลัง เปิดหน้าตอน ReadAWrite แล้วกด bookmarklet “ดึงเข้าห้องแกะนิยาย” เพื่อเพิ่มตอน</div>'; return; }
   rwSelectionOrder = [];
-  list.innerHTML = items.map(x => '<article class="rw-item"><div><label class="row" style="gap:8px"><input type="checkbox" data-rw-select="' + rwEscape(x.id) + '" aria-label="เลือกรายการ ' + rwEscape(x.chapterTitle) + '"><h3>' + rwEscape(x.chapterTitle) + '</h3></label><p>' + rwEscape(x.storyUrl || (x.kind === "collection" ? "ชุดรวมจากคลัง" : x.sourceUrl)) + '</p><p>' + (x.text||"").length.toLocaleString() + ' ตัวอักษร · ' + (x.kind === "collection" ? ((x.sourceIds||[]).length + ' รายการที่รวม') : ((x.captureCount || 1) + ' ครั้งที่นำเข้า')) + ' · อัปเดต ' + rwEscape(new Date(x.updatedAt).toLocaleString()) + '</p></div><div class="row"><button type="button" data-rw-analyze="' + rwEscape(x.id) + '">วิเคราะห์</button>' + (x.kind === "collection" ? '' : '<button type="button" class="ghost" data-rw-open="' + rwEscape(x.id) + '">เปิดต้นทาง</button>') + '<button type="button" class="ghost" data-rw-delete="' + rwEscape(x.id) + '">ลบ</button></div></article>').join("");
-  list.querySelectorAll("[data-rw-select]").forEach(cb => cb.addEventListener("change", () => { const id=cb.dataset.rwSelect; rwSelectionOrder=rwSelectionOrder.filter(x=>x!==id); if(cb.checked)rwSelectionOrder.push(id); }));
-  list.querySelectorAll("[data-rw-analyze]").forEach(b => b.onclick = () => { const x = readAWriteItems().find(i => i.id === b.dataset.rwAnalyze); if (!x) return; src.value = x.text; updateCount(); isExample = false; saveAnalysisSession(src.value); run(); $("t-analyze").click(); $("work").scrollIntoView({behavior:"smooth"}); });
-  list.querySelectorAll("[data-rw-open]").forEach(b => b.onclick = () => { const x = readAWriteItems().find(i => i.id === b.dataset.rwOpen); if (x) window.open(x.sourceUrl, "_blank", "noopener"); });
-  list.querySelectorAll("[data-rw-delete]").forEach(b => b.onclick = () => { const x = readAWriteItems().find(i => i.id === b.dataset.rwDelete); if (x && confirm('ลบตอน "' + x.chapterTitle + '" ออกจากคลังในเบราว์เซอร์นี้หรือไม่?')) { localStorage.setItem(RW_IMPORT_KEY, JSON.stringify(readAWriteItems().filter(i => i.id !== x.id))); renderReadAWriteLibrary(); } });
+  list.innerHTML = items.map(x => {
+    const isReview = Boolean(x.reviewOnly);
+    const label = isReview ? '<p class="rw-review-flag">รอตรวจ · เก็บข้อความดิบไว้แล้ว แต่ยังไม่อนุญาตให้วิเคราะห์</p>' : '';
+    const capture = x.captureDiagnostics ? '<p class="note">วิธีนำเข้า: ' + rwEscape(x.captureDiagnostics.method || "bookmarklet") +
+      (x.captureDiagnostics.selector ? ' · พื้นที่: ' + rwEscape(x.captureDiagnostics.selector) : '') +
+      (x.captureDiagnostics.capturedChars ? ' · ตรวจพบ ' + Number(x.captureDiagnostics.capturedChars).toLocaleString() + ' ตัวอักษร' : '') +
+      (x.captureDiagnostics.privateUseCount ? ' · อักขระพิเศษ ' + Number(x.captureDiagnostics.privateUseCount).toLocaleString() : '') +
+      (x.captureDiagnostics.privateUseRatio ? ' · PUA ' + (Number(x.captureDiagnostics.privateUseRatio) * 100).toFixed(1) + '%' : '') + '</p>' : '';
+    const analyzeButton = isReview
+      ? '<button type="button" class="ghost" data-rw-review="' + rwEscape(x.id) + '">ตรวจปัญหาข้อความ</button>'
+      : '<button type="button" data-rw-analyze="' + rwEscape(x.id) + '">วิเคราะห์</button>';
+    const source = x.kind === "collection" ? "ชุดรวมจากคลัง" : (x.sourceUrl || "");
+    return '<article class="rw-item"><div><label class="row" style="gap:8px"><input type="checkbox" data-rw-select="' + rwEscape(x.id) + '" aria-label="เลือกรายการ ' + rwEscape(x.chapterTitle) + '"><h3>' + rwEscape(x.chapterTitle) + '</h3></label>' +
+      '<p>' + rwEscape(x.storyUrl || source) + '</p>' + label + capture +
+      '<p>' + (x.text||"").length.toLocaleString() + ' ตัวอักษร · ' +
+      (x.kind === "collection" ? ((x.sourceIds||[]).length + ' รายการที่รวม') : ((x.captureCount || 1) + ' ครั้งที่นำเข้า')) +
+      ' · อัปเดต ' + rwEscape(new Date(x.updatedAt || Date.now()).toLocaleString()) + '</p></div><div class="row">' +
+      analyzeButton + (x.kind === "collection" ? '' : '<button type="button" class="ghost" data-rw-open="' + rwEscape(x.id) + '">เปิดต้นทาง</button>') +
+      '<button type="button" class="ghost" data-rw-delete="' + rwEscape(x.id) + '">ลบ</button></div></article>';
+  }).join("");
+  list.querySelectorAll("[data-rw-select]").forEach(cb => cb.addEventListener("change", () => {
+    const id=cb.dataset.rwSelect; rwSelectionOrder=rwSelectionOrder.filter(x=>x!==id); if(cb.checked)rwSelectionOrder.push(id);
+  }));
+  list.querySelectorAll("[data-rw-analyze]").forEach(b => b.onclick = () => {
+    const x = readAWriteItems().find(i => i.id === b.dataset.rwAnalyze);
+    if (!x || x.reviewOnly) return;
+    src.value = x.text; updateCount(); isExample = false; saveAnalysisSession(src.value); run();
+    $("t-analyze").click(); $("work").scrollIntoView({behavior:"smooth"});
+  });
+  list.querySelectorAll("[data-rw-review]").forEach(b => b.onclick = () => {
+    const x = readAWriteItems().find(i => i.id === b.dataset.rwReview);
+    if (!x) return;
+    src.value = x.text; updateCount(); isExample = false; saveAnalysisSession(src.value);
+    const quality = inspectTextQuality(src.value);
+    showQualityWarning(quality, "ฉบับที่เก็บไว้รอตรวจ · " + (x.qualityIssue || quality.issue || "ต้องตรวจทาน"));
+    $("t-analyze").click(); $("work").scrollIntoView({behavior:"smooth"});
+    const status = rwGet("rw-status");
+    if (status) status.textContent = "เปิดฉบับรอตรวจแล้ว ข้อความดิบยังอยู่ในคลังและไฟล์ส่งออก";
+  });
+  list.querySelectorAll("[data-rw-open]").forEach(b => b.onclick = () => {
+    const x = readAWriteItems().find(i => i.id === b.dataset.rwOpen);
+    if (x && x.kind !== "collection") window.open(x.sourceUrl, "_blank", "noopener");
+  });
+  list.querySelectorAll("[data-rw-delete]").forEach(b => b.onclick = () => {
+    const x = readAWriteItems().find(i => i.id === b.dataset.rwDelete);
+    if (x && confirm('ลบรายการ "' + x.chapterTitle + '" ออกจากคลังในเบราว์เซอร์นี้หรือไม่?')) {
+      localStorage.setItem(RW_IMPORT_KEY, JSON.stringify(readAWriteItems().filter(i => i.id !== x.id)));
+      renderReadAWriteLibrary();
+    }
+  });
 }
 rwGet("rw-merge-selected").onclick = () => {
   const status=rwGet("rw-status");
@@ -1537,13 +1708,15 @@ rwGet("rw-merge-selected").onclick = () => {
   // Respect the sequence in which the user checked the source pages; keep originals untouched.
   const byId=new Map(all.map(x=>[x.id,x]));
   const picked=ids.map(id=>byId.get(id)).filter(Boolean);
+  const reviewCount = picked.filter(x => x.reviewOnly).length;
+  if (reviewCount && reviewCount !== picked.length) { status.textContent = "แยกชุดที่รอตรวจออกจากข้อความที่อ่านได้ก่อน เพื่อไม่ให้ข้อความที่เสียหายปนในบทวิเคราะห์"; return; }
   const text=mergeLibraryTexts(picked);
   if(!text.trim()){status.textContent="รายการที่เลือกไม่มีข้อความให้นำมารวม";return;}
   const id="set-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,7);
   const title=prompt("ตั้งชื่อชุดรวม", "ชุดรวม "+picked.map(x=>x.chapterTitle).slice(0,3).join(" + "));
   if(title===null)return;
   const collection={
-    id,kind:"collection",sourceUrl:"novellens-collection://"+id,
+    id,kind:"collection",reviewOnly:reviewCount===picked.length,qualityIssue:reviewCount?"source-items-need-review":"",sourceUrl:"novellens-collection://"+id,
     storyUrl:"",pageTitle:"ชุดรวมจากคลัง",chapterTitle:title.trim()||"ชุดรวมจากคลัง",
     sourceIds:picked.map(x=>x.id),sourceUrls:picked.map(x=>x.sourceUrl),
     text,chars:text.length,captureCount:1,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()
@@ -1570,6 +1743,67 @@ rwGet("rw-export").onclick = () => {
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "novellens-readawrite-library.json"; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 };
 rwGet("rw-clear").onclick = () => { if (readAWriteItems().length && confirm("ลบตอนทั้งหมดจากคลังในเบราว์เซอร์นี้หรือไม่? แนะนำให้ส่งออก JSON ก่อน")) { localStorage.removeItem(RW_IMPORT_KEY); renderReadAWriteLibrary(); rwGet("rw-status").textContent = "ล้างคลังแล้ว"; } };
+rwGet("rw-import-json").addEventListener("change", async e => {
+  const file = e.target.files?.[0]; e.target.value = "";
+  const status = rwGet("rw-status");
+  if (!file) return;
+  if (file.size > 10 * 1024 * 1024) { status.textContent = "ไฟล์ JSON ใหญ่กว่า 10 MB กรุณาแยกไฟล์ก่อนนำเข้า"; return; }
+  try {
+    const payload = JSON.parse(await file.text());
+    const incoming = Array.isArray(payload) ? payload : payload && Array.isArray(payload.items) ? payload.items : null;
+    if (!incoming) throw new Error("ไม่พบรายการ items ในไฟล์สำรอง");
+    if (incoming.length > 500) throw new Error("ไฟล์มีมากกว่า 500 รายการ กรุณาแยกไฟล์");
+    const current = readAWriteItems(), next = [...current];
+    let imported = 0, merged = 0, quarantined = 0, skipped = 0;
+    for (const raw of incoming) {
+      if (!raw || typeof raw !== "object" || typeof raw.text !== "string") { skipped++; continue; }
+      const text = raw.text.trim();
+      if (text.length < 1 || text.length > 2 * 1024 * 1024) { skipped++; continue; }
+      const kind = raw.kind === "collection" ? "collection" : "chapter";
+      const sourceUrl = String(raw.sourceUrl || "");
+      const validCollection = kind === "collection" && /^novellens-collection:\/\//.test(sourceUrl);
+      const validChapter = kind === "chapter" && /^https?:\/\/(?:[^/]+\.)?readawrite\.com\//i.test(sourceUrl);
+      if (!validCollection && !validChapter) { skipped++; continue; }
+      const quality = inspectTextQuality(text);
+      const reviewOnly = Boolean(raw.reviewOnly || !quality.ok);
+      const old = next.find(x => x.sourceUrl === sourceUrl && x.kind === kind && Boolean(x.reviewOnly) === reviewOnly);
+      const mergedText = old ? mergeCaptureText(String(old.text || ""), text) : text;
+      const item = {
+        id: old?.id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 8)),
+        kind, reviewOnly,
+        qualityIssue: reviewOnly ? String(raw.qualityIssue || quality.issue || "needs-review").slice(0,80) : "",
+        sourceUrl,
+        storyUrl: String(raw.storyUrl || (kind === "collection" ? "" : sourceUrl)).slice(0,2000),
+        pageTitle: String(raw.pageTitle || "").slice(0,300),
+        chapterTitle: String(raw.chapterTitle || raw.pageTitle || (kind === "collection" ? "ชุดรวมจากคลัง" : "ตอนที่ไม่ทราบชื่อ")).slice(0,300),
+        sourceIds: Array.isArray(raw.sourceIds) ? raw.sourceIds.map(x=>String(x).slice(0,100)).slice(0,500) : [],
+        sourceUrls: Array.isArray(raw.sourceUrls) ? raw.sourceUrls.map(x=>String(x).slice(0,2000)).slice(0,500) : [],
+        text: mergedText, chars: mergedText.length,
+        captureCount: Math.max(1, Number(old?.captureCount || raw.captureCount || 1)),
+        captureDiagnostics: raw.captureDiagnostics && typeof raw.captureDiagnostics === "object" ? {
+          method: String(raw.captureDiagnostics.method || "JSON backup").slice(0,80),
+          selector: String(raw.captureDiagnostics.selector || "").slice(0,180),
+          selectedChars: Math.max(0,Number(raw.captureDiagnostics.selectedChars || 0)),
+          capturedChars: Math.max(0,Number(raw.captureDiagnostics.capturedChars || text.length)),
+          privateUseCount: Math.max(0,Number(raw.captureDiagnostics.privateUseCount || quality.pua || 0)),
+          privateUseRatio: Math.max(0,Math.min(1,Number(raw.captureDiagnostics.privateUseRatio || quality.puaRatio || 0))),
+          sourceFont: String(raw.captureDiagnostics.sourceFont || "").slice(0,120)
+        } : {method:"JSON backup",selector:"",selectedChars:0,capturedChars:text.length,privateUseCount:quality.pua,sourceFont:""},
+        updatedAt: new Date().toISOString()
+      };
+      if (old) { const i=next.findIndex(x=>x.id===old.id); next[i]=item; merged++; }
+      else { next.unshift(item); imported++; }
+      if (reviewOnly) quarantined++;
+    }
+    if (!imported && !merged) throw new Error("ไม่พบรายการที่รองรับในไฟล์นี้");
+    localStorage.setItem(RW_IMPORT_KEY, JSON.stringify(next));
+    renderReadAWriteLibrary();
+    status.textContent = "นำเข้าเสร็จ: เพิ่ม " + imported + " · รวมเข้ารายการเดิม " + merged + " · เก็บรอตรวจ " + quarantined + " · ข้ามรายการ " + skipped + " รายการ";
+  } catch (error) {
+    status.textContent = "นำเข้า JSON ไม่สำเร็จ: " + String(error && error.message || error);
+  }
+});
+
 renderReadAWriteLibrary();
 
 for (const [tab, panel] of [["t-analyze", "p-analyze"], ["t-studio", "p-studio"], ["t-import", "p-import"]]) $(tab).onclick = () => {
