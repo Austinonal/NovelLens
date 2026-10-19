@@ -266,9 +266,22 @@ summary::marker{color:var(--pen)}
           <div class="row"><input id="analyzer-image-input" type="file" accept="image/png,image/jpeg,image/webp" multiple aria-label="อัปโหลดภาพนิยายเพื่อครอป"></div>
           <div class="analyzer-image-tools"><button id="analyzer-image-clear" class="ghost" type="button">ล้างคิวภาพ</button></div>
           <div id="analyzer-image-queue" class="analyzer-image-queue"></div>
+          <label class="analyzer-image-rights"><input id="analyzer-image-rights" type="checkbox"><span>ฉันเป็นเจ้าของภาพ/ข้อความ หรือได้รับอนุญาตให้นำภาพนี้มาแปลงเป็นข้อความและวิเคราะห์</span></label>
+          <div class="analyzer-image-tools">
+            <label for="analyzer-image-language">ภาษา:</label>
+            <select id="analyzer-image-language" aria-label="ภาษาสำหรับ OCR"><option value="tha" selected>ไทย</option><option value="tha+eng">ไทย + English</option></select>
+            <button id="analyzer-image-ocr" type="button">อ่านข้อความจากภาพ (OCR)</button>
+          </div>
+          <div id="analyzer-image-progress" class="analyzer-image-progress" hidden><i></i></div>
+          <label for="analyzer-image-output">ข้อความจากภาพ (ตรวจแก้ได้ก่อนนำไปวิเคราะห์)</label>
+          <textarea id="analyzer-image-output" class="analyzer-image-output" placeholder="หลัง OCR เสร็จ ข้อความจะปรากฏตรงนี้ ให้ตรวจคำที่อ่านผิดก่อน"></textarea>
+          <div class="analyzer-image-tools">
+            <button id="analyzer-image-analyze" type="button">ส่งข้อความไปวิเคราะห์</button>
+            <button id="analyzer-image-append" class="ghost" type="button">ต่อท้ายข้อความเดิม</button>
+          </div>
+          <p class="note">OCR ทำในเบราว์เซอร์ ไม่มีการส่งภาพไปยัง API แต่ครั้งแรกจะดาวน์โหลดตัวอ่าน OCR และข้อมูลภาษาเพื่อใช้งาน ต้องตรวจแก้ผล OCR เอง เพราะภาพยาวหรือข้อความเล็กอาจอ่านผิดได้</p>
           <div id="analyzer-image-status" class="status" role="status" aria-live="polite"></div>
-          <p class="note">หลังครอป กด “ครอปและบันทึกเข้าคลังภาพ” เพื่อเก็บและใช้ภาพซ้ำ หรือ “ดาวน์โหลดภาพครอป” เพื่อบันทึกลงคอมพิวเตอร์</p>
-          <p class="note">หมายเหตุ: ภาพยังไม่ถูกแปลงเป็นข้อความโดยอัตโนมัติ ปุ่มวิเคราะห์ข้อความจะวิเคราะห์ข้อความในช่องต้นฉบับ ไม่ได้อ่านอักษรจากภาพโดยตรง</p>
+          <p class="note">หลังครอป คุณยังสามารถบันทึกภาพเข้าคลังหรือดาวน์โหลด PNG ได้ ภาพจะไม่ถูกวิเคราะห์จนกว่าจะกด OCR และส่งข้อความเข้าไปยังตัววิเคราะห์</p>
         </section>
         <p class="note">แนะนำให้วิเคราะห์จากต้นฉบับที่เป็นข้อความอ่านได้ หากระบบ ReadAWrite แสดงอักขระแปลก ๆ หลังดึงมา จะหยุดการวิเคราะห์แทนการเดาเนื้อหา</p>
         <div class="row">
