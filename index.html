@@ -204,7 +204,7 @@ summary::marker{color:var(--pen)}
 @media(max-width:620px){.rw-stats{grid-template-columns:1fr}.rw-item{grid-template-columns:1fr}.rw-item .row{justify-content:flex-start}}
 
 </style>
-  <link rel="stylesheet" href="./image-workspace.css">
+  <link rel="stylesheet" href="./image-workspace.css">\n  <link rel="stylesheet" href="./analyzer-images.css">
 </head>
 <body>
 <nav class="topbar">
@@ -256,8 +256,19 @@ summary::marker{color:var(--pen)}
           <button id="paste-clipboard" class="ghost" type="button">วางจากคลิปบอร์ด</button>
           <span class="note">ใช้หลังคัดลอกด้วยวิธีที่เว็บไซต์/ผู้เขียนอนุญาต</span>
         </div>
-        <label for="file-import">หรือเปิดไฟล์ต้นฉบับของคุณ (.txt / .md)</label>
+        <label for="file-import">หรือเปิดไฟล์ต้นฉบับข้อความ (.txt / .md)</label>
         <input id="file-import" class="file-import" type="file" accept=".txt,.md,text/plain,text/markdown">
+        <section class="analyzer-image-box" aria-labelledby="analyzer-image-heading">
+          <span class="tag">IMAGE IMPORT · CROP FIRST</span>
+          <h3 id="analyzer-image-heading">อัปโหลดภาพนิยาย แล้วครอปก่อนบันทึก</h3>
+          <p>เลือกภาพหน้าจอ PNG, JPG หรือ WebP ได้หลายภาพ จากนั้นลากกรอบครอปเฉพาะเนื้อหาที่ต้องการ คุณจะเห็นภาพที่เลือกตรงนี้เลย</p>
+          <div class="row"><input id="analyzer-image-input" type="file" accept="image/png,image/jpeg,image/webp" multiple aria-label="อัปโหลดภาพนิยายเพื่อครอป"></div>
+          <div class="analyzer-image-tools"><button id="analyzer-image-clear" class="ghost" type="button">ล้างคิวภาพ</button></div>
+          <div id="analyzer-image-queue" class="analyzer-image-queue"></div>
+          <div id="analyzer-image-status" class="status" role="status" aria-live="polite"></div>
+          <p class="note">หลังครอป กด “ครอปและบันทึกเข้าคลังภาพ” เพื่อเก็บและใช้ภาพซ้ำ หรือ “ดาวน์โหลดภาพครอป” เพื่อบันทึกลงคอมพิวเตอร์</p>
+          <p class="note">หมายเหตุ: ภาพยังไม่ถูกแปลงเป็นข้อความโดยอัตโนมัติ ปุ่มวิเคราะห์ข้อความจะวิเคราะห์ข้อความในช่องต้นฉบับ ไม่ได้อ่านอักษรจากภาพโดยตรง</p>
+        </section>
         <p class="note">แนะนำให้วิเคราะห์จากต้นฉบับที่เป็นข้อความอ่านได้ หากระบบ ReadAWrite แสดงอักขระแปลก ๆ หลังดึงมา จะหยุดการวิเคราะห์แทนการเดาเนื้อหา</p>
         <div class="row">
           <button id="go">วิเคราะห์</button>
@@ -1501,6 +1512,6 @@ for (const [tab, panel] of [["t-analyze", "p-analyze"], ["t-studio", "p-studio"]
 for (const a of document.querySelectorAll("[data-tab]")) a.addEventListener("click", () => $(a.dataset.tab).click());
 renderChar(); renderPlot(); if (lastStory) renderStory(lastStory);
 </script>
-  <script src="./image-workspace.js"></script>
+  <script src="./image-workspace.js"></script>\n  <script src="./analyzer-images.js"></script>
 </body>
 </html>
