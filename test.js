@@ -1,5 +1,7 @@
 // Self-check for index.html. Run: node test.js  (Node 18+, no install needed)
 const fs = require("fs"), assert = require("assert");
+const writerUtils = require(__dirname + "/writer-workspace.js");
+const jsFileAvailable = typeof writerUtils.analyzeReferenceText === "function";
 const html = fs.readFileSync(__dirname + "/index.html", "utf8");
 const [main, studio] = html.split("<script>").slice(1).map(s => s.split("</script>")[0]);
 [main, studio].forEach(s => new Function(s)); // both scripts parse
@@ -93,6 +95,12 @@ assert(api.classifyEvidence(evidence).label, "genre evidence is labelled with ca
 
 // ReadAWrite importer UI and local-only storage contract
 assert(html.includes('id="t-import"') && html.includes('id="p-import"'), "ReadAWrite library tab and panel exist");
+
+assert(html.includes('id="t-writer"') && html.includes('id="p-writer"'), "Writer's Room tab and panel exist");
+assert(html.includes('href="./writer-workspace.css"') && html.includes('src="./writer-workspace.js"'), "Writer's Room assets are linked");
+assert.equal(typeof writerUtils.buildChapterPlan, "function", "Writer's Room exposes chapter planning utility");
+assert.equal(typeof writerUtils.buildSchedule, "function", "Writer's Room exposes schedule utility");
+
 assert(html.includes("novellens.readawrite.imports.v1"), "imports persist in browser-local storage");
 assert(html.includes("saveReadAWriteImport") && html.includes("sourceUrl:location.href"), "bookmarklet sends source metadata for chapter imports");
 assert(html.includes("data-rw-analyze") && html.includes("data-rw-delete"), "saved chapters can be analyzed and deleted");
@@ -189,5 +197,43 @@ assert(html.includes("captureSelector") && html.includes("capturedLength"), "boo
 assert(html.includes("reviewOnly") && html.includes("data-rw-review"), "unreadable captures are preserved as review-only entries");
 assert(html.includes('id="rw-import-json"') && html.includes("นำเข้าเสร็จ"), "library supports restoring a JSON backup");
 assert(html.includes("แยกชุดที่รอตรวจออกจากข้อความที่อ่านได้ก่อน"), "review-only text cannot be mixed with readable text for analysis");
+
+
+const writerCharacters = [
+  {id:"wr-a",name:"มิน",role:"ตัวเอก",traits:"ช่างสังเกต, รอบคอบ",desire:"ตามหาความจริง",fear:"ถูกทอดทิ้ง",secret:"จำอดีตไม่ได้",backstory:"เติบโตมากับแม่",strengths:"จำรายละเอียด"},
+  {id:"wr-b",name:"เรน",role:"คู่ขัดแย้ง",traits:"ตลกร้าย, ช่างสงสัย",desire:"ปกป้องพี่สาว",fear:"เสียอิสระ",secret:"รู้ว่าใครส่งจดหมาย",backstory:"เคยโกหก",strengths:"อ่านคนเก่ง"}
+];
+const writerProject = {
+  id:"wr-project",title:"บททดสอบ",mode:"standalone",chapterCount:12,genre:"ลึกลับ",
+  premise:"มินพบจดหมายที่ไม่มีผู้ส่ง",question:"ใครแก้ไขความทรงจำ",themes:"ความทรงจำ",
+  ending:"ความจริงมีราคา",styleTraits:"ผู้เล่าที่มีอคติ",moodMix:["ลึกลับ","ตลกร้าย","เศร้า"],
+  tension:60,targetWords:5000,wordsPerPage:250,wordsPerChapter:800,
+  startDate:"2026-10-19",dueDate:"2026-10-30",writingDays:[1,2,3,4,5]
+};
+writerProject.chapters = writerUtils.buildChapterPlan(writerProject, writerCharacters);
+assert.equal(writerProject.chapters.length, 12, "chapter planner creates the requested chapter count");
+assert(writerProject.chapters[0].goal && writerProject.chapters.at(-1).hook, "chapter plan includes goal and ending hook");
+assert(writerProject.chapters.some(c => c.twist), "chapter plan places suggested twists for a longer story");
+const blendedWriterCharacter = writerUtils.createBlend(writerCharacters,{ "wr-a":60, "wr-b":40 });
+assert(blendedWriterCharacter.name.includes("มิน") && blendedWriterCharacter.name.includes("เรน"), "character blend names both source profiles");
+assert(blendedWriterCharacter.traits.includes("ช่างสังเกต") && blendedWriterCharacter.traits.includes("ตลกร้าย"), "character blend combines traits");
+const readiness = writerUtils.evaluatePlan(writerProject, writerCharacters);
+assert(readiness.score >= 0 && readiness.score <= 100 && readiness.checklist.length >= 5, "planner readiness score is bounded and includes a checklist");
+const writerSchedule = writerUtils.buildSchedule(writerProject);
+assert.equal(writerSchedule.sessionCount, 10, "writing schedule respects chosen weekdays and date range");
+assert.equal(writerSchedule.schedule.reduce((n,item)=>n+item.targetWords,0), writerProject.targetWords, "daily word goals sum to the planned book target");
+assert(writerSchedule.schedule.every(item => [1,2,3,4,5].includes(new Date(item.date+"T12:00:00").getDay())), "schedule uses only selected writing weekdays");
+assert.throws(()=>writerUtils.buildSchedule({...writerProject,dueDate:""}), /วันเริ่ม/, "schedule requires dates before preview");
+assert.throws(()=>writerUtils.buildSchedule({...writerProject,writingDays:[]}), /วันเขียน/, "schedule requires at least one writing day");
+const fingerprint = writerUtils.analyzeReferenceText("She is observant, sarcastic, and curious.\nA thoughtful public profile.");
+assert(fingerprint.traits.includes("ช่างสังเกต") && fingerprint.traits.includes("อารมณ์ขันแห้ง/ประชด"), "reference analyzer extracts high-level traits from source notes");
+const styleSample = ("ฉันนั่งอยู่ใต้แสงไฟ แล้วถามตัวเองว่าความจริงจะช่วยอะไรได้หรือไม่? " + '"เขาหัวเราะอย่างประชด" ' + "เสียงฝนยังดังอยู่\\n").repeat(5);
+const styleFingerprint = writerUtils.analyzeReferenceText(styleSample);
+assert(styleFingerprint.signals.averageSentenceLength > 0 && styleFingerprint.signals.averageParagraphLength > 0, "style scan reports sentence and paragraph metrics");
+assert(styleFingerprint.suggestedStyleTraits.includes("เสียงเล่าแบบบุรุษที่หนึ่งเด่น"), "style scan spots a repeated first-person voice signal");
+assert(Number.isFinite(styleFingerprint.signals.dialogueRatio), "style scan reports dialogue ratio");
+assert(styleFingerprint.signals.repeatedWords.length >= 0, "style scan always returns a repeated-word list");
+assert(jsFileAvailable === true, "style scan utility loaded from the Writer's Room module");
+
 
 console.log("all checks passed");
