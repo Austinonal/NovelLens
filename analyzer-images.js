@@ -249,8 +249,8 @@
       say("โปรดยืนยันว่าคุณเป็นเจ้าของภาพ/ข้อความหรือได้รับอนุญาตให้แปลงเป็นข้อความก่อน");
       return;
     }
-    if (!items.length) { say("อัปโหลดภาพอย่างน้อยหนึ่งภาพก่อน"); return; }
-    const uncropped = items.filter(item => !item.crop || item.crop.w < 8 || item.crop.h < 8);
+    if (!pending.length) { say("อัปโหลดภาพอย่างน้อยหนึ่งภาพก่อน"); return; }
+    const uncropped = pending.filter(item => !item.crop || item.crop.w < 8 || item.crop.h < 8);
     if (uncropped.length) {
       say("กรุณาลากกรอบครอปทุกภาพก่อน OCR เพื่อเลือกเฉพาะเนื้อหาที่ต้องการ (" + uncropped.length + " ภาพยังไม่มีกรอบ)");
       return;
@@ -312,9 +312,9 @@
 
       const recognizedSegments = [];
       let confidenceTotal = 0, confidenceCount = 0;
-      for (let index = 0; index < items.length; index++) {
-        const item = items[index];
-        say("กำลังอ่านภาพ " + (index + 1) + "/" + items.length + " · " + item.name);
+      for (let index = 0; index < pending.length; index++) {
+        const item = pending[index];
+        say("กำลังอ่านภาพ " + (index + 1) + "/" + pending.length + " · " + item.name);
         const canvas = makeOcrCanvas(item);
         try {
           let result;
@@ -340,14 +340,14 @@
           canvas.width = 0;
           canvas.height = 0;
         }
-        if (ocrProgress) ocrProgress.style.width = Math.round((index + 1) / items.length * 100) + "%";
+        if (ocrProgress) ocrProgress.style.width = Math.round((index + 1) / pending.length * 100) + "%";
       }
       const text = mergeOcrSegments(recognizedSegments);
       if (!text) throw new Error("ไม่พบข้อความที่อ่านได้ ลองครอปให้เหลือเฉพาะตัวอักษรหรือใช้ภาพที่คมชัดกว่า");
       ocrOutput.value = text;
       ocrOutput.dispatchEvent(new Event("input", { bubbles: true }));
       const confidenceAverage = confidenceCount ? Math.round(confidenceTotal / confidenceCount) : null;
-      say("OCR เสร็จแล้ว " + items.length + " ภาพ · " + text.length.toLocaleString() + " ตัวอักษร" +
+      say("OCR เสร็จแล้ว " + pending.length + " ภาพ · " + text.length.toLocaleString() + " ตัวอักษร" +
         (confidenceAverage !== null ? " · ความมั่นใจเฉลี่ย " + confidenceAverage + "%" : "") +
         " — ตรวจแก้ข้อความด้านล่างก่อนส่งไปวิเคราะห์");
       if (ocrProgress) ocrProgress.style.width = "100%";
