@@ -275,10 +275,17 @@
   const root=$("writer-room-root");
   if(!root)return;
 
-  function h(tag,cls,text){
+  function h(tag,cls,text,...children){
     const node=document.createElement(tag);
     if(cls)node.className=cls;
-    if(text!==undefined&&text!==null)node.textContent=String(text);
+    if(text!==undefined&&text!==null){
+      if(text&&typeof text==="object"&&text.nodeType)node.append(text);
+      else node.textContent=String(text);
+    }
+    for(const child of children.flat())if(child!==undefined&&child!==null){
+      if(child&&typeof child==="object"&&child.nodeType)node.append(child);
+      else node.append(document.createTextNode(String(child)));
+    }
     return node;
   }
   function add(parent,...nodes){for(const node of nodes.flat())if(node)parent.append(node);return parent;}
