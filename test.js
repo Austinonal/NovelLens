@@ -1,6 +1,7 @@
 // Self-check for index.html. Run: node test.js  (Node 18+, no install needed)
 const fs = require("fs"), assert = require("assert");
 const writerUtils = require(__dirname + "/writer-workspace.js");
+const jsFileAvailable = typeof writerUtils.analyzeReferenceText === "function";
 const html = fs.readFileSync(__dirname + "/index.html", "utf8");
 const [main, studio] = html.split("<script>").slice(1).map(s => s.split("</script>")[0]);
 [main, studio].forEach(s => new Function(s)); // both scripts parse
@@ -226,5 +227,13 @@ assert.throws(()=>writerUtils.buildSchedule({...writerProject,dueDate:""}), /ว
 assert.throws(()=>writerUtils.buildSchedule({...writerProject,writingDays:[]}), /วันเขียน/, "schedule requires at least one writing day");
 const fingerprint = writerUtils.analyzeReferenceText("She is observant, sarcastic, and curious.\nA thoughtful public profile.");
 assert(fingerprint.traits.includes("ช่างสังเกต") && fingerprint.traits.includes("อารมณ์ขันแห้ง/ประชด"), "reference analyzer extracts high-level traits from source notes");
+const styleSample = ("ฉันนั่งอยู่ใต้แสงไฟ แล้วถามตัวเองว่าความจริงจะช่วยอะไรได้หรือไม่? " + '"เขาหัวเราะอย่างประชด" ' + "เสียงฝนยังดังอยู่\\n").repeat(5);
+const styleFingerprint = writerUtils.analyzeReferenceText(styleSample);
+assert(styleFingerprint.signals.averageSentenceLength > 0 && styleFingerprint.signals.averageParagraphLength > 0, "style scan reports sentence and paragraph metrics");
+assert(styleFingerprint.suggestedStyleTraits.includes("เสียงเล่าแบบบุรุษที่หนึ่งเด่น"), "style scan spots a repeated first-person voice signal");
+assert(Number.isFinite(styleFingerprint.signals.dialogueRatio), "style scan reports dialogue ratio");
+assert(styleFingerprint.signals.repeatedWords.length >= 0, "style scan always returns a repeated-word list");
+assert(jsFileAvailable === true, "style scan utility loaded from the Writer's Room module");
+
 
 console.log("all checks passed");
