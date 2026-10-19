@@ -211,6 +211,7 @@ summary::marker{color:var(--pen)}
 </style>
   <link rel="stylesheet" href="./image-workspace.css">
   <link rel="stylesheet" href="./analyzer-images.css">
+  <link rel="stylesheet" href="./writer-workspace.css">
 </head>
 <body>
 <nav class="topbar">
@@ -219,6 +220,7 @@ summary::marker{color:var(--pen)}
     <button role="tab" id="t-analyze" aria-selected="true">แกะนิยาย</button>
     <button role="tab" id="t-studio" aria-selected="false">สร้างตัวละครและพล็อต</button>
     <button role="tab" id="t-import" aria-selected="false">คลัง ReadAWrite</button>
+    <button role="tab" id="t-writer" aria-selected="false">ห้องวางแผนเขียน</button>
   </div>
 </nav>
 
@@ -370,6 +372,10 @@ summary::marker{color:var(--pen)}
       <div id="rw-stats" class="rw-stats"></div>
       <div id="rw-library" class="rw-list"></div>
     </section>
+  </div>
+
+  <div id="p-writer" hidden>
+    <div id="writer-room-root" aria-live="polite"></div>
   </div>
 </main>
 
@@ -2049,5 +2055,6 @@ renderChar(); renderPlot(); if (lastStory) renderStory(lastStory);
 </script>
   <script src="./image-workspace.js"></script>
   <script src="./analyzer-images.js"></script>
+  <script src="./writer-workspace.js"></script>
 </body>
 </html>
