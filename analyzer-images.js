@@ -19,7 +19,7 @@
   function revoke(item){ if(item && item.url) URL.revokeObjectURL(item.url); }
   function draw(item){
     const c=item.canvas,im=item.image;
-    const scale=Math.min(1,1200/im.naturalWidth,2400/im.naturalHeight);
+    const scale=Math.min(1,1600/im.naturalWidth,6500/im.naturalHeight,Math.sqrt(5000000/(im.naturalWidth*im.naturalHeight)));
     c.width=Math.max(1,Math.round(im.naturalWidth*scale));
     c.height=Math.max(1,Math.round(im.naturalHeight*scale));
     const ctx=c.getContext("2d",{alpha:false});
