@@ -411,6 +411,14 @@
         const canvas = makeOcrCanvas(item, mode);
         try {
           const workerForThisPage = ocrWorker;
+          const segmentationMode = mode === "binary"
+            ? (api.PSM && api.PSM.AUTO !== undefined ? api.PSM.AUTO : 3)
+            : (api.PSM && api.PSM.SINGLE_BLOCK !== undefined ? api.PSM.SINGLE_BLOCK : 6);
+          await withTimeout(workerForThisPage.setParameters({
+            tessedit_pageseg_mode: segmentationMode,
+            preserve_interword_spaces: "1",
+            user_defined_dpi: "300"
+          }), 15000, "ตั้งค่าโหมดอ่านภาพใช้เวลานานเกินไป");
           let result;
           try {
             result = await withTimeout(
