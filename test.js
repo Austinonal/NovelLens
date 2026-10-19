@@ -51,6 +51,10 @@ assert.equal(protectedResult.issue, "protected-font", "protected-font issue is i
 const mixedProtectedText = ("เนื้อหาไทยปกติ ".repeat(8)) + "\\uE54A".repeat(8) + (" ข้อความต่อท้าย".repeat(8));
 assert.equal(api.inspectTextQuality(mixedProtectedText).ok, false, "mixed Thai and protected-font glyphs are rejected");
 assert.equal(api.inspectTextQuality(mixedProtectedText).issue, "protected-font", "mixed protected-font text gets a specific diagnosis");
+const escapedPua = api.inspectTextQuality(("เนื้อหาปกติ ".repeat(8)) + "\\uE54A".repeat(8) + (" ต่อท้าย".repeat(8)));
+assert.equal(escapedPua.ok, false, "literal private-use escape sequences are rejected");
+assert.equal(escapedPua.issue, "protected-font", "literal private-use escapes get specific diagnosis");
+
 const invisibleText = ("ประโยคภาษาไทยที่อ่านได้ ".repeat(10)) + "\\u200B".repeat(24);
 assert.equal(api.inspectTextQuality(invisibleText).issue, "invisible-characters", "excessive zero-width characters are flagged");
 
