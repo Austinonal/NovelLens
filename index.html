@@ -204,7 +204,7 @@ summary::marker{color:var(--pen)}
 @media(max-width:620px){.rw-stats{grid-template-columns:1fr}.rw-item{grid-template-columns:1fr}.rw-item .row{justify-content:flex-start}}
 
 </style>
-</head>
+  <link rel="stylesheet" href="./image-workspace.css">\n</head>
 <body>
 <nav class="topbar">
   <a class="brand" href="#top"><span class="mark" aria-hidden="true">ห</span>ห้องแกะนิยาย</a>
@@ -305,8 +305,24 @@ summary::marker{color:var(--pen)}
       <div id="rw-status" class="rw-status" role="status" aria-live="polite"></div>
     </section>
     <section class="rw-card">
+      <span class="tag">SCREENSHOT WORKSPACE</span>
+      <h2>นำเข้าภาพหน้าจอและครอป</h2>
+      <p>เลือกภาพหลายไฟล์ ลากเมาส์บนภาพเพื่อเลือกบริเวณที่ต้องการ เก็บภาพที่ครอปลงคลังภาพ และจัดหลายภาพเป็นชุดโดยไม่แก้ไขภาพต้นฉบับ</p>
+      <div class="rw-input"><input id="rw-image-input" type="file" accept="image/png,image/jpeg,image/webp" multiple aria-label="เลือกภาพหน้าจอ"></div>
+      <div class="rw-img-tools"><button id="rw-image-clear" class="ghost" type="button">ล้างรายการภาพชั่วคราว</button></div>
+      <p class="note">ลากกรอบบนภาพเพื่อครอป ถ้าไม่เลือกกรอบจะใช้ภาพเต็ม ระบบเตือนหากภาพมีความละเอียดต่ำ ภาพและกรอบครอปทำงานในเบราว์เซอร์เท่านั้น ส่วนการวิเคราะห์ข้อความให้ใช้ต้นฉบับที่คุณเป็นเจ้าของหรือได้รับอนุญาต</p>
+      <div id="rw-image-queue" class="rw-img-queue"></div>
+      <div id="rw-image-status" class="rw-status" role="status" aria-live="polite"></div>
+      <div class="row" style="justify-content:space-between;margin-top:20px">
+        <div><span class="tag">LOCAL IMAGE LIBRARY</span><h3>คลังภาพที่ครอปแล้ว</h3></div>
+        <div class="rw-img-tools"><button id="rw-image-group" class="ghost" type="button">จัดภาพที่เลือกเป็นชุด</button><button id="rw-image-refresh" class="ghost" type="button">รีเฟรชคลังภาพ</button></div>
+      </div>
+      <p class="note">ติ๊กหลายภาพแล้วจัดเป็นชุด เช่น “Prologue — ภาพ 1 ถึง 4” ภาพต้นฉบับและภาพที่ครอปยังเก็บแยกกันอยู่</p>
+      <div id="rw-image-library" class="rw-img-library"></div>
+    </section>
+    <section class="rw-card">
       <div class="row" style="justify-content:space-between">
-        <div><span class="tag">LOCAL LIBRARY</span><h2>คลังเรื่องที่นำเข้า</h2></div>
+        <div><span class="tag">LOCAL LIBRARY</span><h2>คลังข้อความที่นำเข้า</h2></div>
         <div class="row"><button id="rw-merge-selected" class="ghost" type="button">รวมรายการที่เลือก</button><button id="rw-export" class="ghost" type="button">ส่งออก JSON</button><button id="rw-clear" class="ghost" type="button">ล้างคลัง</button></div>
       </div>
       <p class="note">เลือกหลายหน้า/หลายตอนตามลำดับที่ต้องการรวม (เลือกหน้าต้นก่อน แล้วหน้าถัดไป) จากนั้นกด “รวมรายการที่เลือก” รายการเดิมจะยังอยู่เหมือนเดิม</p>
@@ -1484,5 +1500,5 @@ for (const [tab, panel] of [["t-analyze", "p-analyze"], ["t-studio", "p-studio"]
 for (const a of document.querySelectorAll("[data-tab]")) a.addEventListener("click", () => $(a.dataset.tab).click());
 renderChar(); renderPlot(); if (lastStory) renderStory(lastStory);
 </script>
-</body>
+  <script src="./image-workspace.js"></script>\n</body>
 </html>
