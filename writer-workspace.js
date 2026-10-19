@@ -461,6 +461,39 @@
       statusMessage=result.found?"นำเข้า/ตรวจเทียบเสร็จ เพิ่มตัวละครใหม่ "+result.added+" ตัว": "ยังไม่พบข้อมูลตัวละครเดิมในเครื่องนี้";
       render();
     },"secondary"),btn("ส่งออกคลัง",exportCharacters,"secondary"));
+    const importInput=h("input");
+    importInput.type="file";importInput.accept=".json,application/json";importInput.hidden=true;
+    importInput.addEventListener("change",async()=>{
+      const file=importInput.files&&importInput.files[0];importInput.value="";
+      if(!file)return;
+      if(file.size>5*1024*1024){statusMessage="ไฟล์คลังตัวละครใหญ่กว่า 5 MB";render();return;}
+      try{
+        const payload=JSON.parse(await file.text());
+        const incoming=Array.isArray(payload)?payload:(payload&&Array.isArray(payload.characters)?payload.characters:null);
+        if(!incoming)throw new Error("ไม่พบรายการ characters ในไฟล์นี้");
+        const known=new Set(state.characters.map(c=>String(c.name||"").trim().toLocaleLowerCase()).filter(Boolean));
+        let imported=0,skipped=0;
+        for(const raw of incoming.slice(0,500)){
+          if(!raw||typeof raw!=="object"){skipped++;continue;}
+          const name=String(raw.name||"").trim();
+          if(!name||known.has(name.toLocaleLowerCase())){skipped++;continue;}
+          const cleanText=value=>typeof value==="string"?value.slice(0,20000):Array.isArray(value)?value.map(String).slice(0,100):"";
+          state.characters.unshift({
+            id:id("character"),name:name.slice(0,180),sourceName:String(raw.sourceName||"").slice(0,180),
+            role:String(raw.role||"ตัวละครรอง").slice(0,80),age:String(raw.age||"").slice(0,40),job:String(raw.job||"").slice(0,180),
+            personality:cleanText(raw.personality),traits:cleanText(raw.traits),strengths:cleanText(raw.strengths),
+            flaws:cleanText(raw.flaws||raw.flaw),desire:cleanText(raw.desire||raw.want),fear:cleanText(raw.fear),
+            secret:cleanText(raw.secret),backstory:cleanText(raw.backstory||raw.wound),voice:cleanText(raw.voice||raw.speech),
+            contradiction:cleanText(raw.contradiction),relationships:cleanText(raw.relationships),
+            sourceUrls:Array.isArray(raw.sourceUrls)?raw.sourceUrls.map(String).filter(x=>/^https?:\/\//i.test(x)).slice(0,50):[],
+            notes:cleanText(raw.notes||raw.note),createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()
+          });
+          known.add(name.toLocaleLowerCase());imported++;
+        }
+        save();statusMessage="นำเข้าตัวละคร "+imported+" ตัว · ข้าม "+skipped+" รายการที่ซ้ำหรือข้อมูลไม่ครบ";render();
+      }catch(error){statusMessage="นำเข้าคลังตัวละครไม่สำเร็จ: "+String(error&&error.message||error);render();}
+    });
+    add(tools,btn("นำเข้าคลัง JSON",()=>importInput.click(),"secondary"),importInput);
     left.append(tools);
     const filter=field("ค้นหาตัวละคร","",value=>{
       const list=left.querySelector(".wr-character-list");
@@ -593,7 +626,7 @@
   }
 
   function renderReferences(area){
-    const searchCard=card("ค้นคว้าบุคคลสาธารณะ / ตัวละครต้นแบบ","ค้นสรุปจาก Wikipedia ไทยและอังกฤษ แล้วเปิดแหล่งต้นทางตรวจสอบก่อนนำข้อมูลมาสร้างตัวละคร");
+    const searchCard=card("ค้นคว้าบุคคลสาธารณะ / ตัวละครต้นแบบ","ค้นสรุปจาก Wikipedia ไทยและอังกฤษ แล้วเปิดแหล่งต้นทางตรวจสอบก่อนนำข้อมูลมาสร้างตัวละคร · หลีกเลี่ยงข้อมูลส่วนตัว/อ่อนไหวของบุคคลทั่วไป");
     const query=field("ชื่อที่ต้องการค้น","",()=>{}, {placeholder:"ชื่อบุคคลสาธารณะ / นักเขียน / นักแสดง / ตัวละครสมมติ"});
     query.node.id="wr-ref-query";
     const results=h("div","wr-ref-results");
@@ -764,7 +797,7 @@
       p.styleFingerprint=UTILS.analyzeReferenceText(sample);
       const suggestions=p.styleFingerprint.suggestedStyleTraits||[];
       p.styleTraits=unique(splitList(p.styleTraits).concat(suggestions)).join(", ");
-      save();render();statusMessage="วิเคราะห์ลักษณะเชิงรูปแบบแล้ว · ตรวจผลและแก้สไตล์ที่นำไปใช้ก่อนเขียน";
+      statusMessage="วิเคราะห์ลักษณะเชิงรูปแบบแล้ว · ตรวจผลและแก้สไตล์ที่นำไปใช้ก่อนเขียน";save();render();
     }),btn("ล้างตัวอย่าง",()=>{p.styleSample="";p.styleFingerprint=null;save();render();},"secondary"));
     if(p.styleFingerprint&&p.styleFingerprint.signals){
       const sig=p.styleFingerprint.signals;
@@ -820,8 +853,8 @@
       const next=UTILS.buildChapterPlan(p,chars);
       const old=p.chapters||[];
       p.chapters=next.map((c,i)=>old[i]?{...c,...old[i],id:old[i].id,number:i+1}:c);
-      p.scheduleApproved=false;p.schedule=[];pendingSchedule=null;p.updatedAt=new Date().toISOString();save();render();
-      statusMessage="สร้างโครง "+p.chapters.length+" ตอนแล้ว · เติม/แก้เป้าหมาย ฉาก ปม และ hook ของแต่ละตอน";
+      p.scheduleApproved=false;p.schedule=[];pendingSchedule=null;p.updatedAt=new Date().toISOString();
+      statusMessage="สร้างโครง "+p.chapters.length+" ตอนแล้ว · เติม/แก้เป้าหมาย ฉาก ปม และ hook ของแต่ละตอน";save();render();
     }),btn("นำเข้าร่างจากคลังอ้างอิง",()=>{
       const refs=state.references;
       if(!refs.length){statusMessage="ยังไม่มีแหล่งอ้างอิงในโต๊ะอ้างอิง";render();return;}
@@ -961,7 +994,7 @@
   function renderSchedulePreview(area,p){
     const box=card("วางตารางเขียนจนถึงวันส่ง","ระบบจะคำนวณตามช่วงวันที่และวันเขียนที่คุณเลือก แต่จะยังไม่เพิ่มงานในปฏิทินจนกว่าคุณจะกดยืนยัน");
     const preview=btn("คำนวณตารางและดูตัวอย่าง",()=>{
-      try{pendingSchedule=UTILS.buildSchedule(p);render();statusMessage="ดูตัวอย่างแล้ว ตรวจภาระงานก่อนกดยืนยันใช้ตาราง";}catch(e){statusMessage=e.message;render();}
+      try{pendingSchedule=UTILS.buildSchedule(p);statusMessage="ดูตัวอย่างแล้ว ตรวจภาระงานก่อนกดยืนยันใช้ตาราง";render();}catch(e){statusMessage=e.message;render();}
     });
     box.append(preview);
     if(pendingSchedule){
@@ -1022,7 +1055,7 @@
         if(!p.selectedCharacterIds.includes(existing.id))p.selectedCharacterIds.push(existing.id);
       }
     }
-    save();activeView="planner";state.view=activeView;render();statusMessage="นำเข้าพล็อตเดิมแล้ว ตรวจและแก้ข้อมูลรายตอนก่อนทำตาราง";
+    activeView="planner";state.view=activeView;statusMessage="นำเข้าพล็อตเดิมแล้ว ตรวจและแก้ข้อมูลรายตอนก่อนทำตาราง";save();render();
   }
   function projectMarkdown(p){
     const chars=getProjectCharacters(p);
