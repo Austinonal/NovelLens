@@ -18,3 +18,9 @@
 .analyzer-image-output{width:100%;min-height:240px;resize:vertical;padding:12px;border:1px solid var(--rule2);border-radius:5px;background:var(--paper);color:var(--ink);font:inherit;line-height:1.75}
 .analyzer-image-progress{height:7px;border-radius:999px;overflow:hidden;background:var(--rule);width:100%}
 .analyzer-image-progress i{display:block;height:100%;width:0;background:var(--pen);transition:width .15s}
+
+.analyzer-image-quality{padding:10px 12px;border:1px solid var(--rule2);border-radius:5px;background:var(--desk);font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+.analyzer-image-quality strong{display:block;margin-bottom:5px}
+.analyzer-image-quality ul{margin:0;padding-left:1.2em}
+.analyzer-image-quality li{margin:4px 0}
+.analyzer-image-quality p{margin:7px 0 0;color:var(--pencil)}
