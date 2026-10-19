@@ -252,19 +252,48 @@
     };
   }
   function analyzeReferenceText(text) {
-    const raw=String(text||"");
+    const raw=String(text||"").replace(/\r\n?/g,"\n");
     const traits=[];
     for(const pair of TRAIT_CLUES) if(pair[0].some(word=>raw.toLocaleLowerCase().includes(word.toLocaleLowerCase()))) traits.push(pair[1]);
-    const lines=raw.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+    const paragraphs=raw.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+    const sentences=raw.split(/[.!?…！？。]+|\n+/).map(x=>x.trim()).filter(x=>x.length>=5);
+    const chars=Array.from(raw).filter(ch=>!/\s/u.test(ch)).length||1;
+    const dialogueMatches=raw.match(/["“][^"”]{1,500}["”]|「[^」]{1,500}」|『[^』]{1,500}』/gu)||[];
+    const dialogueChars=dialogueMatches.reduce((n,x)=>n+Array.from(x).filter(ch=>!/\s/u.test(ch)).length,0);
+    const firstPerson=(raw.match(/(?:ฉัน|ผม|ดิฉัน|เรา|I |my |me )/gi)||[]).length;
+    const questions=(raw.match(/[?？]/g)||[]).length;
+    const exclamations=(raw.match(/[!！]/g)||[]).length;
+    const averageParagraphLength=paragraphs.length?Math.round(paragraphs.reduce((n,x)=>n+Array.from(x).length,0)/paragraphs.length):0;
+    const averageSentenceLength=sentences.length?Math.round(sentences.reduce((n,x)=>n+Array.from(x).length,0)/sentences.length):0;
+    const dialogueRatio=dialogueChars/chars;
+    const suggestions=[];
+    if(firstPerson>=2)suggestions.push("เสียงเล่าแบบบุรุษที่หนึ่งเด่น");
+    if(averageSentenceLength>0&&averageSentenceLength<45)suggestions.push("ประโยคค่อนข้างสั้นและคม");
+    else if(averageSentenceLength>=100)suggestions.push("ประโยคยาวและพรรณนาต่อเนื่อง");
+    if(averageParagraphLength>170)suggestions.push("ย่อหน้าพรรณนายาว");
+    else if(averageParagraphLength>0&&averageParagraphLength<70)suggestions.push("ย่อหน้าสั้นและเว้นจังหวะบ่อย");
+    if(dialogueRatio>=0.25)suggestions.push("บทสนทนามีน้ำหนัก");
+    if(sentences.length&&questions/sentences.length>=0.12)suggestions.push("ใช้คำถามผลักความคิดหรือจังหวะเรื่อง");
+    if(sentences.length&&exclamations/sentences.length>=0.08)suggestions.push("ใช้เครื่องหมายอุทานเพื่อเร่งอารมณ์");
+    const lower=raw.toLocaleLowerCase();
+    if(["ประชด","เสียดสี","irony","sarcastic","hypocrisy"].some(x=>lower.includes(x)))suggestions.push("มีสัญญาณเชิงคำของการประชด/เสียดสี");
+    if(["เหงา","ว่างเปล่า","โดดเดี่ยว","สูญเสีย","lonely","alienation","emptiness"].some(x=>lower.includes(x)))suggestions.push("มีคำที่สื่อความโดดเดี่ยวหรือการสูญเสีย");
+    let repeated=[];
+    try{
+      if(typeof Intl!=="undefined"&&Intl.Segmenter){
+        const tokens=[...new Intl.Segmenter("th",{granularity:"word"}).segment(raw)].filter(x=>x.isWordLike).map(x=>x.segment).filter(x=>Array.from(x).length>=2);
+        const counts=new Map();for(const token of tokens)counts.set(token,(counts.get(token)||0)+1);
+        repeated=[...counts.entries()].filter(x=>x[1]>=3).sort((a,b)=>b[1]-a[1]).slice(0,8).map(x=>({word:x[0],count:x[1]}));
+      }
+    }catch(_){}
     return {
-      traits:unique(traits),
+      traits:unique(traits),suggestedStyleTraits:unique(suggestions),
       summary:raw.trim().slice(0,1200),
       signals:{
-        firstPerson:(raw.match(/(?:ฉัน|ผม|ดิฉัน|เรา|I |my |me )/gi)||[]).length,
-        questions:(raw.match(/[?？]/g)||[]).length,
-        exclamations:(raw.match(/[!！]/g)||[]).length,
-        paragraphCount:lines.length,
-        averageParagraphLength:lines.length?Math.round(lines.join("").length/lines.length):0
+        characters:chars,paragraphCount:paragraphs.length,sentenceCount:sentences.length,
+        averageParagraphLength:averageParagraphLength,averageSentenceLength:averageSentenceLength,
+        firstPerson:firstPerson,questions:questions,exclamations:exclamations,
+        dialogueRatio:Math.round(dialogueRatio*100),repeatedWords:repeated
       }
     };
   }
@@ -726,6 +755,42 @@
     if(p.stylePreset&&STYLE_PRESETS[p.stylePreset])styles.append(status(styles,STYLE_PRESETS[p.stylePreset].note,"info"));
     const styleText=textareaField("คุณลักษณะการเล่าที่ต้องการ",p.styleTraits||"",value=>{p.styleTraits=value;save();},"เช่น ผู้เล่าที่ไม่น่าเชื่อถือ, ตลกร้าย, ประโยคสั้นในฉากกดดัน, มู้ดเศร้าสงบ",3);
     styles.append(styleText.wrap);
+    const fingerprint=card("สแกนลายมือจากตัวอย่างข้อความที่คุณมีสิทธิ์ใช้","วางตัวอย่างสั้น ๆ เพื่อวัดลักษณะเชิงรูปแบบในเครื่อง ไม่ได้ส่งข้อความไปหา AI/API และไม่ได้พิสูจน์ว่าเป็นเอกลักษณ์ของผู้เขียนคนใด");
+    const sampleField=textareaField("ตัวอย่างข้อความอ้างอิง",p.styleSample||"",value=>{p.styleSample=value;save();},"วางตัวอย่างที่คุณมีสิทธิ์ใช้ตรงนี้ เช่น ย่อหน้าสั้น ๆ ไม่จำเป็นต้องวางทั้งบท",5);
+    fingerprint.append(sampleField.wrap);
+    fingerprint.append(btn("วิเคราะห์ลักษณะการเล่า",()=>{
+      const sample=String(p.styleSample||"").trim();
+      if(sample.length<80){statusMessage="ตัวอย่างสั้นเกินไป ลองวางอย่างน้อย 80 ตัวอักษรที่คุณมีสิทธิ์ใช้";render();return;}
+      p.styleFingerprint=UTILS.analyzeReferenceText(sample);
+      const suggestions=p.styleFingerprint.suggestedStyleTraits||[];
+      p.styleTraits=unique(splitList(p.styleTraits).concat(suggestions)).join(", ");
+      save();render();statusMessage="วิเคราะห์ลักษณะเชิงรูปแบบแล้ว · ตรวจผลและแก้สไตล์ที่นำไปใช้ก่อนเขียน";
+    }),btn("ล้างตัวอย่าง",()=>{p.styleSample="";p.styleFingerprint=null;save();render();},"secondary"));
+    if(p.styleFingerprint&&p.styleFingerprint.signals){
+      const sig=p.styleFingerprint.signals;
+      const stats=h("div","wr-schedule-summary");
+      add(stats,
+        h("div","wr-statbox",h("strong","",sig.averageSentenceLength),h("span","","ตัวอักษร/ประโยค")),
+        h("div","wr-statbox",h("strong","",sig.averageParagraphLength),h("span","","ตัวอักษร/ย่อหน้า")),
+        h("div","wr-statbox",h("strong","",sig.dialogueRatio+"%"),h("span","","สัดส่วนบทสนทนาโดยประมาณ")),
+        h("div","wr-statbox",h("strong","",sig.questions),h("span","","เครื่องหมายคำถาม")),
+        h("div","wr-statbox",h("strong","",sig.exclamations),h("span","","เครื่องหมายอุทาน")));
+      fingerprint.append(stats);
+      if(p.styleFingerprint.suggestedStyleTraits&&p.styleFingerprint.suggestedStyleTraits.length){
+        fingerprint.append(h("strong","","ลักษณะที่ระบบเสนอ"));
+        const chips=h("div","wr-inline");
+        p.styleFingerprint.suggestedStyleTraits.forEach(x=>chips.append(badge(x,"info")));
+        fingerprint.append(chips);
+      }
+      if(p.styleFingerprint.traits&&p.styleFingerprint.traits.length){
+        fingerprint.append(h("p","wr-muted","คำ/สัญญาณที่ตรวจพบ: "+p.styleFingerprint.traits.join(" · ")));
+      }
+      if(sig.repeatedWords&&sig.repeatedWords.length){
+        fingerprint.append(h("p","wr-muted","คำที่ปรากฏซ้ำในตัวอย่าง: "+sig.repeatedWords.map(x=>x.word+" ×"+x.count).join(" · ")));
+      }
+      fingerprint.append(h("p","wr-muted","ตัวเลขเป็นการวัดเบื้องต้นจากตัวอย่างนี้เท่านั้น ไม่สามารถยืนยันตัวตนผู้เขียนหรือสรุปสไตล์จากหนังสือทั้งเล่มได้"));
+    }
+    styles.append(fingerprint);
     const sliders=h("div","wr-slider-grid");
     for(const [key,label] of [["humor","ตลกร้าย"],["sadness","ความเศร้า"],["tension","แรงกดดัน"],["satire","เสียดสีสังคม"],["tenderness","ความอบอุ่น"]]){
       const f=field(label+" · "+(p[key]||0)+"%",p[key]===undefined?50:p[key],value=>{p[key]=value;save();const t=f.wrap.querySelector("label");if(t)t.textContent=label+" · "+value+"%";},{type:"range",min:0,max:100,step:5});
