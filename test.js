@@ -10,7 +10,7 @@ const sample = main.match(/const SAMPLE_TEXT = (`[\s\S]*?`);/)[1];
 let netCalls = 0;
 const trip = () => { netCalls++; throw new Error("network call"); };
 const api = new Function("fetch", "XMLHttpRequest", "WebSocket", "EventSource", "navigator", engine + studio.split("// ===== Studio UI")[0] +
-  `;return {analyze, compare, count, generate, rollField, validate, similarity, storyText, inspectTextQuality, auditTextCompleteness, normalizeReadAWriteUrl, feelEvidence, classifyEvidence, LEAN, OPPOSITE, PLOTS, STRUCTURES, ENDINGS, SAMPLE_TEXT: ${sample}}`)(trip, trip, trip, trip, {sendBeacon: trip});
+  `;return {analyze, compare, count, generate, rollField, validate, similarity, storyText, inspectTextQuality, auditTextCompleteness, normalizeReadAWriteUrl, extractHtmlFromMhtml, feelEvidence, classifyEvidence, LEAN, OPPOSITE, PLOTS, STRUCTURES, ENDINGS, SAMPLE_TEXT: ${sample}}`)(trip, trip, trip, trip, {sendBeacon: trip});
 
 // Analyzer
 const a = api.analyze(api.SAMPLE_TEXT);
@@ -43,6 +43,24 @@ assert.equal(api.normalizeReadAWriteUrl("[ReadAWrite](https://www.readawrite.com
 assert.equal(api.normalizeReadAWriteUrl("http://www.readawrite.com/a/story").startsWith("https://"), true, "ReadAWrite http URLs are upgraded to https");
 assert.throws(()=>api.normalizeReadAWriteUrl("https://notreadawrite.com/a/story"), /ReadAWrite/, "lookalike domains are rejected");
 assert.throws(()=>api.normalizeReadAWriteUrl("javascript:alert(1)"), /HTTP\/HTTPS/, "javascript URLs are rejected");
+
+const savedArchive = [
+  'MIME-Version: 1.0',
+  'Content-Type: multipart/related; boundary="NL_BOUNDARY"',
+  '',
+  '--NL_BOUNDARY',
+  'Content-Type: text/html; charset="utf-8"',
+  'Content-Transfer-Encoding: quoted-printable',
+  'Content-Location: https://www.readawrite.com/a/chapter%25one',
+  '',
+  '<!doctype html><html><body><article>Sample=20chapter=20text</article></body></html>',
+  '--NL_BOUNDARY--',
+  ''
+].join("\r\n");
+const decodedArchive = api.extractHtmlFromMhtml(savedArchive);
+assert(decodedArchive.html.includes("Sample chapter text"), "MHTML quoted-printable HTML is decoded");
+assert.equal(decodedArchive.contentLocation, "https://www.readawrite.com/a/chapter%25one", "MHTML source URL keeps percent encoding");
+
 
 // Input integrity and evidence checks
 assert(api.inspectTextQuality(api.SAMPLE_TEXT).ok, "readable Thai sample passes text quality guard");
