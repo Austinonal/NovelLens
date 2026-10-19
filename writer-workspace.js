@@ -111,6 +111,27 @@
     const secret = lead.secret || "ข้อมูลสำคัญที่ยังไม่เปิดเผย";
     const rival = characters && characters[1] || {};
     const opposition = rival.name || "แรงต้านจากโลกของเรื่อง";
+    const premise = String(project.premise || "").trim();
+    const question = String(project.question || "").trim() || "ความจริงที่ซ่อนอยู่";
+    const themes = String(project.themes || "").trim();
+    const themeSuffix = themes ? " โดยสะท้อนธีมเรื่อง " + themes : "";
+    const storyAnchor = premise || "เหตุการณ์ตั้งต้นที่ทำให้ชีวิตของตัวเอกเปลี่ยนไป";
+    const styleText = [project.stylePreset || "", project.styleTraits || ""].join(" ").toLocaleLowerCase();
+    const styleMoodRules = [
+      [/ดาไซ|ตลกร้าย|อารมณ์ขันสีดำ|ประชด|sarcastic|ironic|dark humor|satire/i, "ตลกร้าย"],
+      [/ดาไซ|เสียดสีสังคม|เสียดสี|ความเหลื่อมล้ำ|hypocrisy|social satire/i, "เสียดสีสังคม"],
+      [/ขมขื่น|แปลกแยก|โดดเดี่ยว|alienation|bitterness/i, "ขมขื่น"],
+      [/เศร้า|สูญเสีย|เปราะบาง|vulnerability|grief|tragedy/i, "เศร้า"],
+      [/ลึกลับ|สืบสวน|เบาะแส|mystery|detective/i, "ลึกลับ"],
+      [/กดดัน|ระทึก|suspense|high.?stakes|ไล่ล่า/i, "กดดัน"],
+      [/เหนือจริง|surreal|absurd|แฟนตาซี/i, "เหนือจริง"],
+      [/อบอุ่น|อ่อนโยน|tender|warmth/i, "อบอุ่น"],
+      [/ความหวัง|หวัง|hope/i, "หวัง"],
+      [/โรแมนติก|ความรัก|romantic|romance/i, "โรแมนติก"]
+    ];
+    const styleMoods = unique(styleMoodRules.filter(([pattern]) => pattern.test(styleText)).map(([, mood]) => mood));
+    const restrainedStyle = /ยับยั้ง|ถ้อยคำเรียบ|เรียบง่าย|สงบ|เก็บตัว|ครุ่นคิด|restrained|introspective|quiet|minimal/i.test(styleText);
+    const intenseStyle = /กดดัน|ระทึก|เร่งเร้า|เข้มข้น|suspense|high.?stakes|intense|action|ไล่ล่า/i.test(styleText);
     const selectedMoods = splitList(project.moodMix);
     const result = [];
     for (let i = 0; i < count; i++) {
@@ -126,29 +147,69 @@
       else if (progress < 0.94) beatIndex = 8;
       else beatIndex = 9;
       const beat = BEATS[beatIndex];
-      const mood = selectedMoods.length ? selectedMoods[i % selectedMoods.length] : beat.moods[i % beat.moods.length];
-      const tension = clamp(Math.round(beat.tension + (Number(project.tension) - 50) / 25), 1, 10);
-      const isTwist = count >= 4 && [Math.round((count - 1) * 0.28), Math.round((count - 1) * 0.54), Math.round((count - 1) * 0.78)].includes(i);
+      let mood = selectedMoods.length ? selectedMoods[i % selectedMoods.length] : beat.moods[i % beat.moods.length];
+      // Blend a style-derived mood into roughly every third chapter, while keeping the selected mood mix in control.
+      if (styleMoods.length && i % 3 === 1) mood = styleMoods[Math.floor(i / 3) % styleMoods.length];
+      let tension = Math.round(beat.tension + (Number(project.tension) - 50) / 25);
+      if (restrainedStyle && !["climax", "inciting"].includes(beat.key)) tension -= 1;
+      if (intenseStyle && ["inciting", "choice", "rising", "midpoint", "complication", "climax"].includes(beat.key)) tension += 1;
+      tension = clamp(tension, 1, 10);
+      const twistPositions = count >= 4 ? unique([
+        Math.round((count - 1) * 0.28),
+        Math.round((count - 1) * 0.54),
+        Math.round((count - 1) * 0.78)
+      ]) : [];
+      const isTwist = twistPositions.includes(i);
+      const clueUpcoming = twistPositions.some(position => position > i && (i === position - 1 || i === position - 2));
       let goal = "";
-      if (beat.key === "opening") goal = "แนะนำตัวละคร เป้าหมาย และความผิดปกติหนึ่งอย่าง";
+      if (beat.key === "opening") goal = "แนะนำสถานการณ์ตั้งต้น ตัวละคร และความผิดปกติหนึ่งอย่าง" + (premise ? " ซึ่งต่อยอดจาก: " + premise : "") + themeSuffix;
       else if (beat.key === "desire") goal = (lead.name || "ตัวเอก") + " แสดงให้เห็นว่าต้องการ" + desire + " ผ่านการกระทำ";
-      else if (beat.key === "inciting") goal = "เหตุการณ์หนึ่งทำให้เป้าหมายเดิมไปต่อแบบเดิมไม่ได้";
-      else if (beat.key === "choice") goal = "ให้ตัวเอกเลือกทางหนึ่งและมีต้นทุนที่ชัด";
-      else if (beat.key === "rising") goal = "ผลจากการเลือกก่อนหน้ากลับมากดดันเรื่อง";
-      else if (beat.key === "midpoint") goal = "เปิดข้อมูลที่เปลี่ยนความหมายของสิ่งที่ผู้อ่านเข้าใจ";
+      else if (beat.key === "inciting") goal = "เหตุการณ์ตั้งต้นทำให้เป้าหมายเดิมไปต่อแบบเดิมไม่ได้ และผลักตัวเอกให้ตอบคำถามหลัก: " + question;
+      else if (beat.key === "choice") goal = "ให้ตัวเอกเลือกทางหนึ่งเพื่อเข้าใกล้ " + desire + " โดยมีต้นทุนหรือความเสี่ยงที่ชัด";
+      else if (beat.key === "rising") goal = "ผลจากการเลือกก่อนหน้ากลับมากดดันตัวละคร และทำให้ความขัดแย้งซับซ้อนขึ้น";
+      else if (beat.key === "midpoint") goal = "เปิดข้อมูลที่เปลี่ยนความหมายของสิ่งที่ผู้อ่านเข้าใจเกี่ยวกับ " + (secret || question);
       else if (beat.key === "complication") goal = opposition + " หรือสถานการณ์บีบให้ข้อเสียของตัวเอกส่งผล";
       else if (beat.key === "lowpoint") goal = "ตัวเอกต้องเผชิญสิ่งที่กลัว: " + fear;
-      else if (beat.key === "climax") goal = "การเลือกครั้งสำคัญพิสูจน์ว่าตัวละครเปลี่ยนไปอย่างไร";
-      else goal = mode === "serial" ? "ปิดปมย่อยหนึ่งเรื่องและเปิดคำถามถัดไป" : "ตอบคำถามหลักและแสดงผลระยะยาวของการเลือก";
-      const twist = isTwist ? (beat.key === "midpoint" ? "เผยหลักฐานใหม่ที่เปลี่ยนข้อสรุปเดิม" : beat.key === "climax" ? "เฉลยความเชื่อมโยงที่ปูไว้ก่อนหน้า" : "ใส่เบาะแสที่ดูธรรมดาแต่มีความหมายภายหลัง") : "";
+      else if (beat.key === "climax") goal = "การเลือกครั้งสำคัญระหว่าง " + desire + " กับความกลัวเรื่อง " + fear + " ตอบคำถามหลักว่า " + question;
+      else goal = mode === "serial" ? "ปิดปมย่อยหนึ่งเรื่องและเปิดคำถามถัดไป" : "ตอบคำถามหลักว่า " + question + " และแสดงผลระยะยาวของการเลือก" + themeSuffix;
+      const twist = isTwist ? (beat.key === "midpoint" ? "เผยหลักฐานใหม่ที่เปลี่ยนข้อสรุปเดิมเกี่ยวกับ " + secret : beat.key === "climax" ? "เฉลยความเชื่อมโยงที่ปูไว้ก่อนหน้าและเปลี่ยนความหมายของ " + storyAnchor : "ใส่เบาะแสที่ดูธรรมดาแต่ภายหลังเชื่อมโยงกับ " + secret) : "";
       const hook = i === count - 1
         ? (mode === "serial" ? "เปิดคำถามใหม่ให้ติดตามภาคต่อ" : "ปิดเส้นอารมณ์หลักพร้อมภาพหรือประโยคสะท้อนธีม")
         : "ทิ้งการตัดสินใจ คำถาม หรือผลกระทบที่พาไปตอนถัดไป";
+      const sceneByBeat = {
+        opening: "เปิดด้วยสถานการณ์นี้: " + storyAnchor + " แล้วแสดงรายละเอียดผิดปกติหนึ่งอย่างที่ทำให้ผู้อ่านอยากรู้ต่อ",
+        desire: (lead.name || "ตัวเอก") + " ลงมือเพื่อ" + desire + " ในฉากที่เห็นการกระทำจริง ไม่ใช่เพียงอธิบายความคิด",
+        inciting: "ผลจากเหตุการณ์ตั้งต้น (" + storyAnchor + ") ปิดทางเลือกเดิมและทำให้ " + (lead.name || "ตัวเอก") + " ต้องเริ่มลงมือ",
+        choice: (lead.name || "ตัวเอก") + " ต้องเลือกว่าจะเดินหน้าเพื่อ" + desire + " หรือรักษาตัวเองจากความกลัวเรื่อง" + fear,
+        rising: "แสดงผลที่ตามมาจากการตัดสินใจก่อนหน้า ให้เหตุการณ์นี้สร้างปัญหาหรือภาระใหม่ ไม่ใช่เริ่มเรื่องย่อยที่ไม่เกี่ยวกัน",
+        midpoint: "นำข้อมูลหรือพฤติกรรมที่ดูขัดแย้งมาเชื่อมกับความลับเรื่อง" + secret + " เพื่อเปลี่ยนความหมายของเหตุการณ์ก่อนหน้าโดยยังไม่เฉลยหมด",
+        complication: (lead.name || "ตัวเอก") + " เผชิญแรงต้านจาก " + opposition + " ซึ่งกระทบเป้าหมาย " + desire,
+        lowpoint: "ผลสะสมจากการเลือกก่อนหน้าบังคับให้ " + (lead.name || "ตัวเอก") + " เผชิญความกลัวเรื่อง" + fear,
+        climax: "ให้ตัวละครเลือกและจ่ายราคาจริงระหว่างเป้าหมาย " + desire + " กับความกลัวเรื่อง" + fear + " พร้อมเฉลยสิ่งที่ปูไว้",
+        resolution: (mode === "serial" ? "คลี่ปมย่อยของภาคนี้และเหลือผลกระทบหนึ่งอย่างสำหรับภาคต่อ" : "ตอบคำถามหลักว่า " + question + " ด้วยผลจากการเลือกของตัวเอก") + themeSuffix
+      };
+      const conflictByBeat = {
+        opening: "สิ่งที่ " + (lead.name || "ตัวเอก") + " เชื่อหรือคาดหวัง ปะทะกับความผิดปกติในสถานการณ์ตั้งต้น",
+        desire: "ความต้องการ " + desire + " ปะทะกับข้อจำกัดของตัวละครและสิ่งที่กลัวคือ " + fear,
+        inciting: "เป้าหมายเดิมของตัวเอกขัดกับเหตุการณ์ใหม่ที่เริ่มจาก " + storyAnchor,
+        choice: "ตัวเอกต้องเลือกระหว่างการเข้าใกล้ " + desire + " กับความเสี่ยงที่อาจทำให้ " + fear + " กลายเป็นจริง",
+        rising: "ผลของการเลือกครั้งก่อนเพิ่มต้นทุน และทำให้ตัวละครต้องเปลี่ยนแผน",
+        midpoint: "สิ่งที่ตัวละครเชื่อเกี่ยวกับ " + question + " ขัดกับหลักฐานที่แตะความลับเรื่อง " + secret,
+        complication: (lead.name || "ตัวเอก") + " และ " + opposition + " มีเป้าหมายหรือวิธีการที่ขัดกัน",
+        lowpoint: "เป้าหมาย " + desire + " ดูเหมือนทำให้ตัวเอกสูญเสียสิ่งที่ต้องการปกป้องจากความกลัว " + fear,
+        climax: "ตัวเอกต้องยอมเสียบางสิ่งเพื่อเลือกว่าจะยึด " + desire + " หรือเผชิญความกลัว " + fear,
+        resolution: "คำตอบต่อคำถามหลัก (" + question + ") ต้องสอดคล้องกับผลที่ตัวละครก่อไว้"
+      };
+      const clue = isTwist
+        ? "เชื่อมเบาะแสกับความลับ " + secret + " และตรวจให้แน่ใจว่ามีร่องรอยก่อนเฉลย"
+        : clueUpcoming ? "ปูรายละเอียดเล็ก ๆ ที่เชื่อมภายหลังกับ " + secret + " โดยไม่เฉลยตรง ๆ" : "";
       result.push({
         id: id("chapter"), number: i + 1, title: "ตอนที่ " + (i + 1) + " — " + beat.title,
         beat: beat.title, beatKey: beat.key, mood: mood, tension: tension,
-        goal: goal, scene: "", conflict: "", clue: isTwist ? secret : "",
-        twist: twist, hook: hook, cast: names.slice(0, 3), status: "ยังไม่เริ่ม", note: ""
+        goal: goal, scene: sceneByBeat[beat.key] || "พัฒนาเหตุการณ์ต่อจากตอนก่อนโดยยึด " + storyAnchor,
+        conflict: conflictByBeat[beat.key] || "ตรวจว่าเป้าหมายและแรงต้านของตัวละครปะทะกันตรงไหน",
+        clue: clue, twist: twist, hook: hook, cast: names.slice(0, 3), status: "ยังไม่เริ่ม",
+        note: [themes ? "ธีม: " + themes : "", project.stylePreset ? "แนวทางสไตล์: " + project.stylePreset : ""].filter(Boolean).join(" · ")
       });
     }
     return result;
