@@ -1932,6 +1932,14 @@ rwGet("rw-import-html").onclick = async () => {
         : "อ่านข้อความจาก HTML แล้ว แต่ไม่พบ URL ReadAWrite ที่ยืนยันได้ จึงยังไม่เพิ่มเข้าคลัง · ใส่ URL ต้นทางด้านบนแล้วค่อยนำเข้าใหม่ได้";
     }
     if(typeof renderReadAWriteLibrary==="function")renderReadAWriteLibrary();
+    const analyzerStatus=rwGet("status");
+    if(analyzerStatus){
+      analyzerStatus.textContent=!quality.ok
+        ? "นำเข้าข้อความแล้ว แต่ตรวจพบความผิดปกติและหยุดวิเคราะห์อัตโนมัติ — ดูรายงานคุณภาพข้อความและตรวจเทียบต้นฉบับ"
+        : item
+          ? "นำเข้า HTML/MHTML และบันทึกเข้าคลังแล้ว · "+text.length.toLocaleString()+" ตัวอักษร · ส่วนข้อความ: "+result.selector
+          : "อ่านข้อความแล้วและแสดงผลวิเคราะห์ แต่ยังไม่ได้เพิ่มเข้าคลังเพราะไม่พบ URL ReadAWrite ที่ยืนยันได้";
+    }
     $("t-analyze").click();$("work").scrollIntoView({behavior:"smooth"});
   }catch(error){
     status.textContent="อ่านไฟล์ HTML ไม่สำเร็จ: "+String(error&&error.message||error);
