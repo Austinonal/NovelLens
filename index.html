@@ -1992,7 +1992,8 @@ rwGet("rw-import-json").addEventListener("change", async e => {
       if (!validCollection && !validChapter) { skipped++; continue; }
       const quality = inspectTextQuality(text);
       const reviewOnly = Boolean(raw.reviewOnly || !quality.ok);
-      const old = next.find(x => x.sourceUrl === sourceUrl && x.kind === kind && Boolean(x.reviewOnly) === reviewOnly);
+      const dedupeSourceUrl = kind === "chapter" ? normalizedSourceUrl : sourceUrl;
+      const old = next.find(x => x.sourceUrl === dedupeSourceUrl && x.kind === kind && Boolean(x.reviewOnly) === reviewOnly);
       const mergedText = old ? mergeCaptureText(String(old.text || ""), text) : text;
       const item = {
         id: old?.id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 8)),
