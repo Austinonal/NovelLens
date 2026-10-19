@@ -506,6 +506,11 @@ function inspectTextQuality(raw){
   const text=String(raw||"").trim();
   const chars=[...text], size=chars.length||1;
   const pua=(text.match(/[\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]/gu)||[]).length;
+  // Treat literal Unicode escape spellings as suspicious text instead of interpreting/decrypting them.
+  const escapedCodes=text.match(/\\u(?:\{[0-9A-Fa-f]{4,6}\}|[0-9A-Fa-f]{4})/g)||[];
+  const escapedPoints=escapedCodes.map(token=>parseInt(token.includes("{")?token.slice(3,-1):token.slice(2),16));
+  const escapedPua=escapedPoints.filter(cp=>(cp>=0xE000&&cp<=0xF8FF)||(cp>=0xF0000&&cp<=0xFFFFD)||(cp>=0x100000&&cp<=0x10FFFD)).length;
+  const escapedInvisible=escapedPoints.filter(cp=>(cp>=0x200B&&cp<=0x200F)||cp===0x2060||cp===0xFEFF).length;
   const replacement=(text.match(/\uFFFD/g)||[]).length;
   const controls=(text.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g)||[]).length;
   const thai=(text.match(/[\u0E00-\u0E7F]/g)||[]).length;
@@ -513,16 +518,19 @@ function inspectTextQuality(raw){
   const visibleLetter=(text.match(/[\p{L}\p{N}]/gu)||[]).length;
   const puaRatio=pua/size, replacementRatio=replacement/size, zeroWidthRatio=zeroWidth/size;
   // A few unusual characters may be legitimate. These combined signals indicate a broken or obfuscated text layer.
-  const protectedFont=(pua>=5 && puaRatio>=0.003) || (pua>=3 && puaRatio>=0.02);
+  const escapedPuaRatio=escapedPua/size, escapedInvisibleRatio=escapedInvisible/size;
+  const protectedFont=(pua>=5 && puaRatio>=0.003) || (pua>=3 && puaRatio>=0.02)
+    || (escapedPua>=3 && escapedPuaRatio>=0.01);
   const damagedEncoding=(replacement>=3 && replacementRatio>=0.002) || controls>=4;
   const suspiciousText=(size>=120 && visibleLetter/size<0.42 && pua+replacement+controls>=4);
-  const excessiveInvisible=(size>=120 && zeroWidth>=12 && zeroWidthRatio>=0.025);
+  const excessiveInvisible=(size>=120 && zeroWidth>=12 && zeroWidthRatio>=0.025)
+    || (size>=120 && escapedInvisible>=12 && escapedInvisibleRatio>=0.025);
   let issue="",reason="";
-  if(protectedFont){issue="protected-font";reason="พบอักขระ Private Use Area "+pua.toLocaleString()+" ตัว ("+(puaRatio*100).toFixed(1)+"%) ข้อความจาก DOM อาจเป็นรหัสฟอนต์ ไม่ใช่ภาษาไทยจริง";}
+  if(protectedFont){issue="protected-font";reason="พบอักขระหรือ escape ที่อ้างถึง Private Use Area "+(pua+escapedPua).toLocaleString()+" รายการ ("+pua.toLocaleString()+" อักขระจริง, "+escapedPua.toLocaleString()+" escape) ข้อความอาจไม่ใช่ภาษาอ่านได้";}
   else if(damagedEncoding){issue="encoding-damage";reason="พบอักขระทดแทนหรือ control characters มากผิดปกติ ข้อความอาจเสียหายระหว่างคัดลอก";}
   else if(excessiveInvisible){issue="invisible-characters";reason="พบอักขระ zero-width จำนวนมากผิดปกติ ข้อความอาจถูกแปลงรูปแบบหรือคัดลอกมาไม่สมบูรณ์";}
   else if(suspiciousText){issue="suspicious-text";reason="สัดส่วนตัวอักษรที่อ่านได้ต่ำผิดปกติเมื่อเทียบกับความยาวข้อความ จึงไม่มั่นใจว่าเป็นต้นฉบับที่สะอาด";}
-  return {ok:!issue,size,pua,replacement,controls,thai,zeroWidth,visibleLetter,puaRatio,replacementRatio,zeroWidthRatio,issue,message:reason};
+  return {ok:!issue,size,pua,escapedPua,escapedInvisible,replacement,controls,thai,zeroWidth,visibleLetter,puaRatio,escapedPuaRatio,replacementRatio,zeroWidthRatio,escapedInvisibleRatio,issue,message:reason};
 }
 
 function auditTextCompleteness(raw){
