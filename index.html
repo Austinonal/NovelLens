@@ -204,7 +204,8 @@ summary::marker{color:var(--pen)}
 @media(max-width:620px){.rw-stats{grid-template-columns:1fr}.rw-item{grid-template-columns:1fr}.rw-item .row{justify-content:flex-start}}
 
 </style>
-  <link rel="stylesheet" href="./image-workspace.css">\n  <link rel="stylesheet" href="./analyzer-images.css">
+  <link rel="stylesheet" href="./image-workspace.css">
+  <link rel="stylesheet" href="./analyzer-images.css">
 </head>
 <body>
 <nav class="topbar">
@@ -1512,6 +1513,7 @@ for (const [tab, panel] of [["t-analyze", "p-analyze"], ["t-studio", "p-studio"]
 for (const a of document.querySelectorAll("[data-tab]")) a.addEventListener("click", () => $(a.dataset.tab).click());
 renderChar(); renderPlot(); if (lastStory) renderStory(lastStory);
 </script>
-  <script src="./image-workspace.js"></script>\n  <script src="./analyzer-images.js"></script>
+  <script src="./image-workspace.js"></script>
+  <script src="./analyzer-images.js"></script>
 </body>
 </html>
