@@ -686,8 +686,13 @@
       ["outlineNotes","ข้อห้าม/สิ่งที่ต้องเกิด",{multiline:true,rows:3,placeholder:"เหตุการณ์ที่ต้องมี, สิ่งที่ห้ามขัดกัน, ปมที่ต้องเฉลย"}]
     ];
     for(const [key,label,opts] of specs){
-      if(!opts.select&&!opts.multiline&&!opts.type)continue;
-      const f=field(label,p[key],value=>{p[key]=value;if(key==="chapterCount")p.chapterCount=clamp(value,1,100);p.updatedAt=new Date().toISOString();save();},{...opts});
+      const f=field(label,p[key],value=>{
+        p[key]=value;
+        if(key==="chapterCount")p.chapterCount=clamp(value,1,100);
+        p.scheduleApproved=false;
+        p.updatedAt=new Date().toISOString();
+        save();
+      },{...opts});
       if(["title","premise","themes","outlineNotes","question"].includes(key))f.wrap.classList.add("wr-span-2");
       grid.append(f.wrap);
     }
@@ -965,8 +970,8 @@
     }
     head.append(controls);
     if(!p.scheduleApproved||!p.schedule||!p.schedule.length){
-      head.append(empty("ยังไม่มีตารางที่ยืนยันแล้ว ไปที่ Story Planner → คำนวณตารางและดูตัวอย่าง → ตรวจภาระงาน → กดยืนยันก่อน")),
-        btn("ไปที่ Story Planner",()=>{activeView="planner";state.view=activeView;save();render();});
+      head.append(empty("ยังไม่มีตารางที่ยืนยันแล้ว ไปที่ Story Planner → คำนวณตารางและดูตัวอย่าง → ตรวจภาระงาน → กดยืนยันก่อน"));
+      head.append(btn("ไปที่ Story Planner",()=>{activeView="planner";state.view=activeView;save();render();}));
       area.append(head);return;
     }
     const tasks=p.schedule.filter(t=>String(t.date||"").slice(0,7)===calendarMonth);
