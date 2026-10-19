@@ -68,7 +68,7 @@
   function drawPreview(item) {
     const image = item.image;
     const canvas = item.canvas;
-    const scale = Math.min(1, 1200 / image.naturalWidth, 2400 / image.naturalHeight);
+    const scale = Math.min(1, 1600 / image.naturalWidth, 6500 / image.naturalHeight, Math.sqrt(5000000 / (image.naturalWidth * image.naturalHeight)));
     canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
     canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
     const context = canvas.getContext("2d", { alpha: false });
