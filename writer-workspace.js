@@ -312,6 +312,47 @@
       notes:"ได้จากการผสมน้ำหนัก "+scored.map(x=>(x.c.name||"ตัวละคร")+" "+x.w+"%").join(", ")+". เป็นตัวละครสมมติที่ต้องตรวจและแก้ก่อนใช้จริง"
     };
   }
+  // One URL per line; http(s) only, de-duplicated, capped so one click cannot flood the page.
+  function parseUrlList(text,limit){
+    const out={valid:[],skipped:0,tooMany:false},seen=new Set();
+    const lines=String(text||"").split(/\s+/).map(x=>x.trim()).filter(Boolean);
+    for(const raw of lines){
+      let u;try{u=new URL(raw);}catch(_){out.skipped++;continue;}
+      if(!/^https?:$/.test(u.protocol)||seen.has(u.href)){out.skipped++;continue;}
+      seen.add(u.href);out.valid.push({url:u.href,host:u.hostname});
+    }
+    out.tooMany=out.valid.length>(limit||12);
+    return out;
+  }
+  // MediaWiki sites (Wikipedia, Fandom ...) allow anonymous CORS through their API, unlike the HTML page.
+  function wikiApiUrl(href){
+    let u;try{u=new URL(href);}catch(_){return "";}
+    const m=u.pathname.match(/^\/wiki\/([^/]+)$/);
+    if(!m||!/^https?:$/.test(u.protocol))return "";
+    let title;try{title=decodeURIComponent(m[1]).replace(/_/g," ");}catch(_){return "";}
+    const api=/(^|\.)wikipedia\.org$/.test(u.hostname)?"/w/api.php":"/api.php";
+    return u.origin+api+"?action=query&redirects=1&prop=extracts&exintro=1&explaintext=1&format=json&origin=*&titles="+encodeURIComponent(title);
+  }
+  const cleanTitle=t=>String(t||"").split(/\s[|–—-]\s/)[0].trim();
+  // First sentences only: a starting note to rewrite, not a copy of the page.
+  function briefText(text,max){
+    const flat=String(text||"").replace(/\s+/g," ").trim();
+    if(flat.length<=max)return flat;
+    const cut=flat.slice(0,max),end=Math.max(cut.lastIndexOf(". "),cut.lastIndexOf("。"),cut.lastIndexOf(" "));
+    return cut.slice(0,end>max*0.5?end:max).trim()+"…";
+  }
+  // Builds a character-library entry from a linked page; `text` is empty when the page could not be read.
+  function characterFromSource(src){
+    const name=cleanTitle(src.title)||String(src.host||""),analysis=analyzeReferenceText(src.text||"");
+    const now=new Date().toISOString();
+    return {
+      id:id("character"),name:name.slice(0,180),sourceName:name.slice(0,180),role:"ตัวละครต้นแบบ",
+      personality:analysis.traits.join(", "),traits:analysis.traits.join(", "),strengths:"",flaws:"",desire:"",fear:"",secret:"",
+      backstory:briefText(src.text,300),voice:"",contradiction:"",relationships:"",sourceUrls:[src.url],
+      notes:(src.text?"สรุปย่อจากลิงก์ที่วาง · ":"อ่านหน้านี้อัตโนมัติไม่ได้ ("+(src.error||"เว็บไม่อนุญาต")+") ให้เติมข้อมูลเอง · ")+"ตรวจกับต้นทางแล้วเขียนใหม่ด้วยคำของคุณ และตั้งชื่อ/รายละเอียดใหม่ให้เป็นตัวละครสมมติของเรื่อง",
+      createdAt:now,updatedAt:now
+    };
+  }
   function analyzeReferenceText(text) {
     const raw=String(text||"").replace(/\r\n?/g,"\n");
     const traits=[];
@@ -358,7 +399,7 @@
       }
     };
   }
-  const UTILS={buildChapterPlan:buildChapterPlan,evaluatePlan:evaluatePlan,buildSchedule:buildSchedule,createBlend:createBlend,analyzeReferenceText:analyzeReferenceText,normalizeDate:todayISO};
+  const UTILS={buildChapterPlan:buildChapterPlan,evaluatePlan:evaluatePlan,buildSchedule:buildSchedule,createBlend:createBlend,analyzeReferenceText:analyzeReferenceText,parseUrlList:parseUrlList,wikiApiUrl:wikiApiUrl,characterFromSource:characterFromSource,normalizeDate:todayISO};
   if (typeof module === "object" && module.exports) module.exports=UTILS;
   if (typeof document === "undefined") return;
   const $=id=>document.getElementById(id);
@@ -414,7 +455,7 @@
       if(opts.placeholder)node.placeholder=opts.placeholder;
     }
     if(opts.required)node.required=true;
-    node.addEventListener(opts.select?"change":"input",()=>onChange(opts.type==="number"?Number(node.value):node.value,node));
+    node.addEventListener(opts.select?"change":"input",()=>{if(typeof onChange==="function")onChange(opts.type==="number"?Number(node.value):node.value,node);});
     if(opts.help)add(wrap,h("small","wr-help",opts.help));
     add(wrap,lab,node);
     return {wrap:wrap,node:node};
@@ -767,6 +808,19 @@
         return {url:u.href,title:title||u.hostname,excerpt:content.slice(0,5000)};
       }finally{clearTimeout(timeout);}
     }
+    async function readSource(rawUrl){
+      const api=UTILS.wikiApiUrl(rawUrl);
+      if(api){
+        const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000);
+        try{
+          const response=await fetch(api,{method:"GET",credentials:"omit",signal:controller.signal});
+          const data=response.ok?await response.json():null;
+          const page=data&&Object.values(data.query&&data.query.pages||{})[0];
+          if(page&&page.extract)return {url:rawUrl,title:page.title,excerpt:String(page.extract).slice(0,5000)};
+        }catch(_){}finally{clearTimeout(timeout);}
+      }
+      return readReferencePage(rawUrl);
+    }
     const sourceCard=card("เพิ่มหลายแหล่งพร้อมกัน","วาง URL หลายบรรทัดได้ ระบบจะลองดึงเนื้อหาจากเว็บที่อนุญาต CORS และบันทึกแหล่งที่อ่านไม่ได้ไว้ให้เติมสรุปเอง ไม่สามารถข้ามข้อจำกัดของทุกเว็บไซต์ได้");
     const urls=textareaField("URL อ้างอิง (หนึ่งลิงก์ต่อบรรทัด)","","","https://example.com/biography\nhttps://example.com/interview",4);
     const manualTitle=field("ชื่อชุดแหล่งอ้างอิง","",()=>{},{placeholder:"เช่น บุคลิกและบทสัมภาษณ์"});
@@ -848,7 +902,33 @@
       }
       save();statusMessage="บันทึก "+added+" แหล่ง · ข้าม "+skipped+" URL ที่ไม่ถูกต้อง";render();
     },"secondary");
-    sourceCard.append(urls.wrap,manualTitle.wrap,excerpt.wrap,fetchStatus,h("div","wr-inline",fetchSources,saveLinks));
+    const makeCharacters=btn("สร้างตัวละครจากลิงก์เหล่านี้เลย",async()=>{
+      const parsed=UTILS.parseUrlList(urls.node.value,12);
+      if(!parsed.valid.length){fetchStatus.textContent="วางลิงก์ HTTP/HTTPS อย่างน้อยหนึ่งลิงก์ก่อน";return;}
+      if(parsed.tooMany){fetchStatus.textContent="มี "+parsed.valid.length+" ลิงก์ · แบ่งทำครั้งละไม่เกิน 12 ลิงก์";return;}
+      makeCharacters.disabled=true;makeCharacters.textContent="กำลังสร้าง…";
+      const known=new Set(state.characters.flatMap(c=>c.sourceUrls||[])),fallback=excerpt.node.value.trim();
+      let done=0,made=[],readable=0,duplicate=0;
+      fetchStatus.textContent="กำลังอ่าน 0/"+parsed.valid.length+" ลิงก์";
+      const loaded=await Promise.all(parsed.valid.map(async entry=>{
+        let out;
+        if(known.has(entry.url)){duplicate++;out=null;}
+        else try{const page=await readSource(entry.url);out={entry,text:page.excerpt,title:page.title};}
+        catch(error){out={entry,text:fallback,title:"",error:String(error&&error.name==="AbortError"?"หมดเวลารอ 12 วินาที":error&&error.message||"อ่านไม่ได้")};}
+        fetchStatus.textContent="กำลังอ่าน "+(++done)+"/"+parsed.valid.length+" ลิงก์";
+        return out;
+      }));
+      for(const item of loaded.filter(Boolean)){
+        if(!item.error)readable++;
+        made.push(UTILS.characterFromSource({title:item.title,host:item.entry.host,url:item.entry.url,text:item.text,error:item.error}));
+      }
+      makeCharacters.disabled=false;makeCharacters.textContent="สร้างตัวละครจากลิงก์เหล่านี้เลย";
+      if(!made.length){fetchStatus.textContent="ลิงก์ทั้งหมดมีตัวละครอยู่แล้ว ไม่ได้สร้างซ้ำ";return;}
+      state.characters.unshift(...made);state.activeCharacterId=made[0].id;activeView="characters";state.view=activeView;save();
+      statusMessage="สร้างตัวละคร "+made.length+" ตัวจากลิงก์ · อ่านเนื้อหาได้ "+readable+" · ต้องเติมเอง "+(made.length-readable)+(duplicate?" · ข้ามที่มีอยู่แล้ว "+duplicate:"")+(parsed.skipped?" · ข้าม URL ที่ไม่ถูกต้อง "+parsed.skipped:"");
+      render();
+    });
+    sourceCard.append(urls.wrap,manualTitle.wrap,excerpt.wrap,fetchStatus,h("div","wr-inline",makeCharacters,fetchSources,saveLinks));
     area.append(sourceCard);
 
     const saved=card("แหล่งอ้างอิงที่บันทึกไว้",String(state.references.length)+" รายการ · ลิงก์และบันทึกเก็บในเบราว์เซอร์");
