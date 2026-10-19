@@ -153,21 +153,43 @@
     } catch (_) {}
   });
 
+  function withTimeout(promise, milliseconds, message) {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), milliseconds);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+  }
+
   async function loadTesseract() {
     if (window.Tesseract && window.Tesseract.createWorker) return window.Tesseract;
     if (!ocrLibraryPromise) {
       ocrLibraryPromise = new Promise((resolve, reject) => {
         const script = document.createElement("script");
+        let settled = false;
+        const finishError = message => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          ocrLibraryPromise = null;
+          reject(new Error(message));
+        };
+        const timer = setTimeout(() => {
+          finishError("ดาวน์โหลดตัวอ่าน OCR ใช้เวลานานเกิน 30 วินาที เครือข่ายอาจบล็อก CDN ให้ลองรีเฟรชหรือเชื่อมต่อใหม่");
+        }, 30000);
         script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
         script.async = true;
         script.onload = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
           if (window.Tesseract && window.Tesseract.createWorker) resolve(window.Tesseract);
-          else reject(new Error("โหลดตัว OCR แล้วแต่ไม่พบเครื่องมือ"));
+          else {
+            ocrLibraryPromise = null;
+            reject(new Error("โหลดไฟล์ OCR แล้วแต่ไม่พบเครื่องมือ"));
+          }
         };
-        script.onerror = () => {
-          ocrLibraryPromise = null;
-          reject(new Error("โหลด OCR ไม่สำเร็จ โปรดตรวจอินเทอร์เน็ตแล้วลองอีกครั้ง"));
-        };
+        script.onerror = () => finishError("โหลดตัวอ่าน OCR ไม่สำเร็จ ตรวจอินเทอร์เน็ตหรือการเข้าถึง jsDelivr แล้วลองใหม่");
         document.head.append(script);
       });
     }
@@ -242,19 +264,49 @@
     ocrButton.textContent = "กำลังอ่านข้อความ…";
     const language = ocrLanguage ? ocrLanguage.value : "tha";
     try {
+      say("กำลังโหลดตัวอ่าน OCR… หากเป็นครั้งแรกอาจใช้เวลาสักครู่");
       const api = await loadTesseract();
       if (!ocrWorker || ocrWorkerLanguage !== language) {
         if (ocrWorker) { await ocrWorker.terminate(); ocrWorker = null; }
-        say("กำลังเตรียม OCR ภาษา " + (language === "tha+eng" ? "ไทย + English" : "ไทย") + " — ครั้งแรกจะดาวน์โหลดตัวอ่านและข้อมูลภาษา");
-        ocrWorker = await api.createWorker(language, 1, {
+        say("กำลังโหลดข้อมูลภาษา " + (language === "tha+eng" ? "ไทย + English" : "ไทย") + " ลงในเบราว์เซอร์…");
+        let initTimedOut = false;
+        const workerPromise = api.createWorker(language, 1, {
           logger: message => {
-            if (message.status === "recognizing text") {
-              const percent = Math.round((message.progress || 0) * 100);
+            const phase = String(message.status || "");
+            const percent = Math.round((message.progress || 0) * 100);
+            if (phase === "recognizing text") {
               if (ocrProgress) ocrProgress.style.width = percent + "%";
               say("กำลังอ่านข้อความจากภาพ · " + percent + "%");
+            } else if (phase.includes("language")) {
+              say("กำลังดาวน์โหลด/เตรียมข้อมูลภาษา… " + (Number.isFinite(message.progress) ? percent + "%" : ""));
+            } else if (phase.includes("core") || phase.includes("tesseract")) {
+              say("กำลังเตรียมเครื่องอ่าน OCR… " + (Number.isFinite(message.progress) ? percent + "%" : ""));
+            } else if (phase) {
+              say("กำลังเตรียม OCR: " + phase + (Number.isFinite(message.progress) ? " · " + percent + "%" : ""));
             }
+          },
+          errorHandler: error => {
+            say("OCR รายงานข้อผิดพลาด: " + String(error && error.message || error));
           }
+        }).then(worker => {
+          if (initTimedOut) {
+            worker.terminate().catch(() => {});
+            return null;
+          }
+          return worker;
         });
+        try {
+          ocrWorker = await withTimeout(
+            workerPromise,
+            120000,
+            "เตรียม OCR ไม่เสร็จภายใน 2 นาที อาจดาวน์โหลดข้อมูลภาษาไม่สำเร็จ ให้ตรวจอินเทอร์เน็ต/CDN แล้วลองอีกครั้ง"
+          );
+        } catch (error) {
+          initTimedOut = true;
+          workerPromise.then(worker => { if (worker) worker.terminate().catch(() => {}); }).catch(() => {});
+          throw error;
+        }
+        if (!ocrWorker) throw new Error("ตัวอ่าน OCR ถูกหยุดหลังหมดเวลารอ กรุณาลองอีกครั้ง");
         ocrWorkerLanguage = language;
       }
 
@@ -265,7 +317,21 @@
         say("กำลังอ่านภาพ " + (index + 1) + "/" + items.length + " · " + item.name);
         const canvas = makeOcrCanvas(item);
         try {
-          const result = await ocrWorker.recognize(canvas);
+          let result;
+          const workerForThisPage = ocrWorker;
+          try {
+            result = await withTimeout(
+              workerForThisPage.recognize(canvas),
+              180000,
+              "อ่านภาพ " + item.name + " ใช้เวลานานเกิน 3 นาที ภาพอาจใหญ่เกินไปหรือ OCR ติดขัด"
+            );
+          } catch (error) {
+            if (String(error && error.message || error).includes("นานเกิน 3 นาที")) {
+              if (workerForThisPage) workerForThisPage.terminate().catch(() => {});
+              if (ocrWorker === workerForThisPage) { ocrWorker = null; ocrWorkerLanguage = ""; }
+            }
+            throw error;
+          }
           const text = String(result && result.data && result.data.text || "").trim();
           if (text) recognizedSegments.push(text);
           const confidence = Number(result && result.data && result.data.confidence);
