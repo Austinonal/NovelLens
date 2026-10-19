@@ -838,32 +838,75 @@ $("file-import").addEventListener("change", async e => {
 });
 
 // --- Receive chapter text from the bookmarklet ---
-const BOOKMARKLET = app => `javascript:(()=>{const APP=${JSON.stringify(app)};let t=String(getSelection()).trim();if(t.length<200){const m=new Map();document.querySelectorAll('p').forEach(p=>{const k=p.parentElement;m.set(k,(m.get(k)||0)+p.innerText.trim().length)});let b=null,n=0;m.forEach((v,k)=>{if(v>n){n=v;b=k}});if(!b||n<=200){alert('ไม่พบเนื้อเรื่องเป็นข้อความบนหน้านี้ ถ้าเว็บมีโหมดอ่านแบบ html ให้สลับไปโหมดนั้น หรือลากคลุมเนื้อเรื่องแล้วกดใหม่');return}t=b.innerText.trim()}const host=location.hostname;const links=[...document.querySelectorAll('a[href]')].filter(a=>/readawrite\\.com$/.test(new URL(a.href,location.href).hostname)&&/\\/a\\//.test(new URL(a.href,location.href).pathname));const storyLink=links.find(a=>a.href!==location.href&&!/ตอนที่|chapter|episode/i.test(a.innerText))?.href||location.href;const title=document.querySelector('h1')?.innerText.trim()||document.querySelector('meta[property="og:title"]')?.content||document.title;const w=window.open(APP,'_blank');const o=new URL(APP).origin;addEventListener('message',function f(e){if(e.source===w&&e.origin===o&&e.data==='novel-ready'){w.postMessage({type:'novel-text',text:t,title:document.title,chapterTitle:title,sourceUrl:location.href,storyUrl:storyLink,sourceHost:host,sourceFont:getComputedStyle(document.querySelector("article")||document.querySelector("main")||document.body).fontFamily},o);removeEventListener('message',f)}})})()`;
+const BOOKMARKLET = app => `javascript:(()=>{const APP=${JSON.stringify(app)};
+const clean=s=>String(s||"").replace(/\u00a0/g," ").replace(/\r\n?/g,"\n").replace(/[ \t]+\n/g,"\n").replace(/\n{3,}/g,"\n\n").trim();
+const visible=el=>{if(!el||!el.isConnected)return false;const s=getComputedStyle(el);return s.display!=="none"&&s.visibility!=="hidden"&&Number(s.opacity||1)>0&&el.getClientRects().length>0;};
+const ignored=el=>el.matches("script,style,noscript,template,svg,nav,footer,aside,button,input,textarea,select,option,[hidden],[aria-hidden='true'],[role='navigation'],[role='button'],[contenteditable='true'],[class*='comment'],[id*='comment'],[class*='recommend'],[class*='related'],[class*='toolbar']");
+const visibleText=root=>{const out=[];const blockTags=/^(ADDRESS|ARTICLE|BLOCKQUOTE|DIV|DL|DT|DD|FIGCAPTION|H[1-6]|LI|MAIN|P|PRE|SECTION|TR)$/;const walk=node=>{if(node.nodeType===Node.TEXT_NODE){out.push(node.nodeValue||"");return;}if(node.nodeType!==Node.ELEMENT_NODE)return;const el=node;if(ignored(el)||!visible(el))return;if(blockTags.test(el.tagName))out.push("\n");for(const child of el.childNodes)walk(child);if(blockTags.test(el.tagName))out.push("\n");};walk(root);return clean(out.join(""));};
+const selection=clean(String(getSelection()||""));let text="",method="",chosenSelector="";
+if(selection.length>=200){text=selection;method="selected-text";chosenSelector="browser-selection";}
+if(!text){
+ const selectors=["article","main","[role='main']","[class*='chapter-content']","[class*='chapter_content']","[class*='reader-content']","[class*='reader_content']","[class*='novel-content']","[id*='chapter']","[id*='reader']","[class*='content']","[id*='content']"];
+ const roots=new Map();
+ for(const selector of selectors){try{for(const el of document.querySelectorAll(selector)){if(!visible(el)||roots.has(el))continue;let priority=0;if(el.matches("article"))priority+=900;if(el.matches("main,[role='main']"))priority+=250;if(/chapter|reader|novel/i.test((el.id||"")+" "+(el.className||"")))priority+=700;if(/content/i.test((el.id||"")+" "+(el.className||"")))priority+=200;roots.set(el,{selector,priority});}}catch(_){}}
+ const paragraphs=[...document.querySelectorAll("p")].filter(p=>visible(p)&&clean(p.innerText||p.textContent).length>=20);
+ const groups=new Map();
+ for(const p of paragraphs){const root=p.closest("article,main,[role='main'],[class*='chapter-content'],[class*='reader-content'],[class*='content']")||p.parentElement;if(root&&visible(root)){if(!groups.has(root))groups.set(root,[]);groups.get(root).push(clean(p.innerText||p.textContent));}}
+ for(const [root,lines] of groups){if(!roots.has(root))roots.set(root,{selector:"visible-paragraph-group",priority:350,override:lines.join("\n")});}
+ const candidates=[];
+ for(const [root,meta] of roots){let candidate=clean(meta.override||visibleText(root));if(candidate.length<80||candidate.length>250000)continue;const useful=(candidate.match(/[\p{L}\p{M}\p{N}]/gu)||[]).length/(candidate.length||1);if(useful<0.45)continue;const lines=candidate.split("\n").filter(x=>x.trim());const repeated=lines.length-new Set(lines).size;const score=candidate.length+meta.priority-repeated*35;candidates.push({candidate,selector:meta.selector,score});}
+ candidates.sort((a,b)=>b.score-a.score);
+ const best=candidates[0];
+ if(best){text=best.candidate;method="visible-page-text";chosenSelector=best.selector;}
+}
+if(text.length<80){alert("NovelLens: ยังตรวจพบข้อความที่มองเห็นได้ไม่มากพอ ("+text.length+" ตัวอักษร)\nลองลากเลือกเนื้อหาที่อ่านได้อย่างน้อยหนึ่งย่อหน้า แล้วกด bookmarklet อีกครั้ง หรือใช้ภาพที่คุณมีสิทธิ์ใช้งานกับ OCR");return;}
+const host=location.hostname;
+const title=document.querySelector("h1")?.innerText.trim()||document.querySelector("meta[property='og:title']")?.content||document.title;
+const pua=(text.match(/[\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]/gu)||[]).length;
+const links=[...document.querySelectorAll("a[href]")].filter(a=>{try{const u=new URL(a.href,location.href);return /readawrite\.com$/.test(u.hostname)&&/\/a\//.test(u.pathname);}catch(_){return false;}});
+const storyLink=links.find(a=>a.href!==location.href&&!/ตอนที่|chapter|episode/i.test(a.innerText))?.href||location.href;
+const sourceFont=getComputedStyle(document.querySelector("article")||document.querySelector("main")||document.body).fontFamily;
+const payload={type:"novel-text",text,title:document.title,chapterTitle:title,sourceUrl:location.href,storyUrl:storyLink,sourceHost:host,sourceFont,captureMethod:method,captureSelector:chosenSelector,selectionLength:selection.length,capturedLength:text.length,privateUseCount:pua,capturedAt:new Date().toISOString()};
+const w=window.open(APP,"_blank");if(!w){alert("NovelLens: เบราว์เซอร์บล็อกหน้าต่างใหม่ ให้เปิด NovelLens ค้างไว้แล้วอนุญาตป๊อปอัป หรือเปิดเว็บ NovelLens ก่อนลองใหม่");return;}
+const origin=new URL(APP).origin;
+addEventListener("message",function f(e){if(e.source!==w||e.origin!==origin||e.data!=="novel-ready")return;w.postMessage(payload,origin);removeEventListener("message",f);});
+})()`;
 $("bm").href = BOOKMARKLET(location.href.split("#")[0]);
 $("bm").onclick = e => { e.preventDefault(); status.textContent = "ลากปุ่มนี้ไปไว้ที่แถบบุ๊กมาร์ก แล้วไปกดที่หน้าตอนนิยาย"; };
 addEventListener("message", e => {
   if (e.source !== window.opener || e.data?.type !== "novel-text") return;
   src.value = String(e.data.text || ""); updateCount();
-  isExample = false;
-  saveAnalysisSession(src.value);
+  isExample = false; saveAnalysisSession(src.value);
   const quality = inspectTextQuality(src.value);
+  const capture = Object.assign({}, e.data, {
+    reviewOnly: !quality.ok, qualityIssue: quality.issue || "",
+    captureDiagnostics: {
+      method: String(e.data.captureMethod || "bookmarklet"),
+      selector: String(e.data.captureSelector || ""),
+      selectedChars: Number(e.data.selectionLength || 0),
+      capturedChars: Number(e.data.capturedLength || src.value.length),
+      privateUseCount: Number(e.data.privateUseCount || quality.pua || 0),
+      sourceFont: String(e.data.sourceFont || "").slice(0, 120)
+    }
+  });
+  const item = typeof saveReadAWriteImport === "function" ? saveReadAWriteImport(capture) : null;
   if (!quality.ok) {
     showQualityWarning(quality, "ข้อความจาก Bookmarklet · ฟอนต์ต้นทาง: " + String(e.data.sourceFont || "ไม่ทราบ").slice(0, 100));
-    status.textContent = "ไม่ได้บันทึกข้อความนี้ เพราะตรวจพบอักขระที่อาจถูกแทนด้วยฟอนต์พิเศษ";
+    status.textContent = "ข้อความยังไม่ได้วิเคราะห์ แต่ได้เก็บฉบับตรวจทานในคลังแล้ว หากบันทึกสำเร็จจะระบุว่า “รอตรวจ”";
     const rwStatus = document.getElementById("rw-status");
-    if (rwStatus) rwStatus.textContent = "ไม่ได้เพิ่มเข้าคลัง: ข้อความที่ดึงมาอาจไม่ใช่ต้นฉบับที่อ่านได้";
+    if (rwStatus) rwStatus.textContent = item
+      ? "เก็บฉบับรอตรวจไว้แล้ว (" + quality.issue + ") · " + item.text.length.toLocaleString() + " ตัวอักษร — ไม่ถอดรหัสหรือวิเคราะห์จนกว่าจะมีข้อความอ่านได้"
+      : "เก็บฉบับรอตรวจไม่สำเร็จ ตรวจพื้นที่จัดเก็บเบราว์เซอร์";
+    if (typeof renderReadAWriteLibrary === "function") renderReadAWriteLibrary();
     return;
   }
   status.textContent = "ดึงมาแล้ว: " + String(e.data.title || "").slice(0, 80);
   run();
-  if (typeof saveReadAWriteImport === "function") {
-    const item = saveReadAWriteImport(e.data);
-    if (item) {
-      const rwStatus = document.getElementById("rw-status");
-      if (rwStatus) rwStatus.textContent = "เก็บตอนในคลังแล้ว: " + item.chapterTitle + " · " + item.text.length.toLocaleString() + " ตัวอักษร";
-      if (typeof renderReadAWriteLibrary === "function") renderReadAWriteLibrary();
-    }
-  }
+  const rwStatus = document.getElementById("rw-status");
+  if (rwStatus) rwStatus.textContent = item
+    ? "เก็บตอนในคลังแล้ว: " + item.chapterTitle + " · " + item.text.length.toLocaleString() + " ตัวอักษร"
+    : "วิเคราะห์แล้ว แต่บันทึกเข้าคลังไม่สำเร็จ ตรวจ URL และพื้นที่จัดเก็บ";
+  if (typeof renderReadAWriteLibrary === "function") renderReadAWriteLibrary();
 });
 if (window.opener) window.opener.postMessage("novel-ready", "*");
 
@@ -1476,20 +1519,34 @@ function saveReadAWriteImport(data) {
   const text = String(data.text || "").trim();
   const sourceUrl = String(data.sourceUrl || "");
   const quality = inspectTextQuality(text);
-  if (!quality.ok) {
+  const reviewOnly = Boolean(data.reviewOnly || !quality.ok);
+  if (text.length < (reviewOnly ? 20 : 80) || !/^https?:\/\/(?:[^/]+\.)?readawrite\.com\//i.test(sourceUrl)) {
     const status = rwGet("rw-status");
-    if (status) status.textContent = "ไม่ได้บันทึก: ข้อความไม่สมบูรณ์หรือมีอักขระจากฟอนต์พิเศษ";
+    if (status) status.textContent = reviewOnly
+      ? "ยังเก็บฉบับรอตรวจไม่ได้: ข้อความสั้นเกินไปหรือ URL ไม่ใช่หน้าตอน ReadAWrite"
+      : "ยังเก็บไม่ได้: ข้อความสั้นเกินไปหรือ URL ไม่ใช่หน้าตอน ReadAWrite";
     return null;
   }
-  if (text.length < 80 || !/^https?:\/\/(?:[^/]+\.)?readawrite\.com\//i.test(sourceUrl)) return null;
   const items = readAWriteItems();
-  const old = items.find(x => x.sourceUrl === sourceUrl && x.kind !== "collection");
+  const old = items.find(x => x.sourceUrl === sourceUrl && x.kind !== "collection" && Boolean(x.reviewOnly) === reviewOnly);
   const mergedText = old ? mergeCaptureText(String(old.text || ""), text) : text;
+  const rawDiag = data.captureDiagnostics && typeof data.captureDiagnostics === "object" ? data.captureDiagnostics : {};
+  const diagnostics = {
+    method: String(rawDiag.method || data.captureMethod || "bookmarklet").slice(0,80),
+    selector: String(rawDiag.selector || data.captureSelector || "").slice(0,180),
+    selectedChars: Math.max(0,Number(rawDiag.selectedChars || data.selectionLength || 0)),
+    capturedChars: Math.max(0,Number(rawDiag.capturedChars || data.capturedLength || text.length)),
+    privateUseCount: Math.max(0,Number(rawDiag.privateUseCount || data.privateUseCount || quality.pua || 0)),
+    sourceFont: String(rawDiag.sourceFont || data.sourceFont || "").slice(0,120)
+  };
   const item = {
     id: old?.id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 8)),
-    kind: "chapter",
-    sourceUrl, storyUrl: String(data.storyUrl || old?.storyUrl || sourceUrl), pageTitle: String(data.title || old?.pageTitle || ""),
-    chapterTitle: String(data.chapterTitle || data.title || old?.chapterTitle || "ตอนที่ไม่ทราบชื่อ"),
+    kind: "chapter", reviewOnly,
+    qualityIssue: reviewOnly ? String(data.qualityIssue || quality.issue || "needs-review").slice(0,80) : "",
+    captureDiagnostics: diagnostics,
+    sourceUrl, storyUrl: String(data.storyUrl || old?.storyUrl || sourceUrl),
+    pageTitle: String(data.title || old?.pageTitle || "").slice(0,300),
+    chapterTitle: String(data.chapterTitle || data.title || old?.chapterTitle || "ตอนที่ไม่ทราบชื่อ").slice(0,300),
     text: mergedText, chars: mergedText.length,
     captureCount: (old?.captureCount || 0) + (old && mergedText === String(old.text || "") ? 0 : 1),
     updatedAt: new Date().toISOString()
@@ -1519,14 +1576,63 @@ function renderReadAWriteLibrary() {
   const items = readAWriteItems(), list = rwGet("rw-library"), stats = rwGet("rw-stats");
   if (!list || !stats) return;
   const stories = new Set(items.map(x => x.storyUrl || x.sourceUrl));
-  stats.innerHTML = '<div class="rw-stat"><span>เรื่องที่พบ</span><b>' + stories.size + '</b></div><div class="rw-stat"><span>ตอนที่เก็บไว้</span><b>' + items.length + '</b></div><div class="rw-stat"><span>ตัวอักษรรวม</span><b>' + items.reduce((n,x)=>n+(x.text||"").length,0).toLocaleString() + '</b></div>';
+  const pendingReview = items.filter(x => x.reviewOnly).length;
+  stats.innerHTML =
+    '<div class="rw-stat"><span>เรื่องที่พบ</span><b>' + stories.size + '</b></div>' +
+    '<div class="rw-stat"><span>รายการในคลัง</span><b>' + items.length + '</b></div>' +
+    '<div class="rw-stat"><span>รอตรวจข้อความ</span><b>' + pendingReview + '</b></div>' +
+    '<div class="rw-stat"><span>ตัวอักษรรวม</span><b>' + items.reduce((n,x)=>n+(x.text||"").length,0).toLocaleString() + '</b></div>';
   if (!items.length) { list.innerHTML = '<div class="rw-empty">ยังไม่มีตอนในคลัง เปิดหน้าตอน ReadAWrite แล้วกด bookmarklet “ดึงเข้าห้องแกะนิยาย” เพื่อเพิ่มตอน</div>'; return; }
   rwSelectionOrder = [];
-  list.innerHTML = items.map(x => '<article class="rw-item"><div><label class="row" style="gap:8px"><input type="checkbox" data-rw-select="' + rwEscape(x.id) + '" aria-label="เลือกรายการ ' + rwEscape(x.chapterTitle) + '"><h3>' + rwEscape(x.chapterTitle) + '</h3></label><p>' + rwEscape(x.storyUrl || (x.kind === "collection" ? "ชุดรวมจากคลัง" : x.sourceUrl)) + '</p><p>' + (x.text||"").length.toLocaleString() + ' ตัวอักษร · ' + (x.kind === "collection" ? ((x.sourceIds||[]).length + ' รายการที่รวม') : ((x.captureCount || 1) + ' ครั้งที่นำเข้า')) + ' · อัปเดต ' + rwEscape(new Date(x.updatedAt).toLocaleString()) + '</p></div><div class="row"><button type="button" data-rw-analyze="' + rwEscape(x.id) + '">วิเคราะห์</button>' + (x.kind === "collection" ? '' : '<button type="button" class="ghost" data-rw-open="' + rwEscape(x.id) + '">เปิดต้นทาง</button>') + '<button type="button" class="ghost" data-rw-delete="' + rwEscape(x.id) + '">ลบ</button></div></article>').join("");
-  list.querySelectorAll("[data-rw-select]").forEach(cb => cb.addEventListener("change", () => { const id=cb.dataset.rwSelect; rwSelectionOrder=rwSelectionOrder.filter(x=>x!==id); if(cb.checked)rwSelectionOrder.push(id); }));
-  list.querySelectorAll("[data-rw-analyze]").forEach(b => b.onclick = () => { const x = readAWriteItems().find(i => i.id === b.dataset.rwAnalyze); if (!x) return; src.value = x.text; updateCount(); isExample = false; saveAnalysisSession(src.value); run(); $("t-analyze").click(); $("work").scrollIntoView({behavior:"smooth"}); });
-  list.querySelectorAll("[data-rw-open]").forEach(b => b.onclick = () => { const x = readAWriteItems().find(i => i.id === b.dataset.rwOpen); if (x) window.open(x.sourceUrl, "_blank", "noopener"); });
-  list.querySelectorAll("[data-rw-delete]").forEach(b => b.onclick = () => { const x = readAWriteItems().find(i => i.id === b.dataset.rwDelete); if (x && confirm('ลบตอน "' + x.chapterTitle + '" ออกจากคลังในเบราว์เซอร์นี้หรือไม่?')) { localStorage.setItem(RW_IMPORT_KEY, JSON.stringify(readAWriteItems().filter(i => i.id !== x.id))); renderReadAWriteLibrary(); } });
+  list.innerHTML = items.map(x => {
+    const isReview = Boolean(x.reviewOnly);
+    const label = isReview ? '<p class="rw-review-flag">รอตรวจ · เก็บข้อความดิบไว้แล้ว แต่ยังไม่อนุญาตให้วิเคราะห์</p>' : '';
+    const capture = x.captureDiagnostics ? '<p class="note">วิธีนำเข้า: ' + rwEscape(x.captureDiagnostics.method || "bookmarklet") +
+      (x.captureDiagnostics.selector ? ' · พื้นที่: ' + rwEscape(x.captureDiagnostics.selector) : '') +
+      (x.captureDiagnostics.capturedChars ? ' · ตรวจพบ ' + Number(x.captureDiagnostics.capturedChars).toLocaleString() + ' ตัวอักษร' : '') +
+      (x.captureDiagnostics.privateUseCount ? ' · อักขระพิเศษ ' + Number(x.captureDiagnostics.privateUseCount).toLocaleString() : '') + '</p>' : '';
+    const analyzeButton = isReview
+      ? '<button type="button" class="ghost" data-rw-review="' + rwEscape(x.id) + '">ตรวจปัญหาข้อความ</button>'
+      : '<button type="button" data-rw-analyze="' + rwEscape(x.id) + '">วิเคราะห์</button>';
+    const source = x.kind === "collection" ? "ชุดรวมจากคลัง" : (x.sourceUrl || "");
+    return '<article class="rw-item"><div><label class="row" style="gap:8px"><input type="checkbox" data-rw-select="' + rwEscape(x.id) + '" aria-label="เลือกรายการ ' + rwEscape(x.chapterTitle) + '"><h3>' + rwEscape(x.chapterTitle) + '</h3></label>' +
+      '<p>' + rwEscape(x.storyUrl || source) + '</p>' + label + capture +
+      '<p>' + (x.text||"").length.toLocaleString() + ' ตัวอักษร · ' +
+      (x.kind === "collection" ? ((x.sourceIds||[]).length + ' รายการที่รวม') : ((x.captureCount || 1) + ' ครั้งที่นำเข้า')) +
+      ' · อัปเดต ' + rwEscape(new Date(x.updatedAt || Date.now()).toLocaleString()) + '</p></div><div class="row">' +
+      analyzeButton + (x.kind === "collection" ? '' : '<button type="button" class="ghost" data-rw-open="' + rwEscape(x.id) + '">เปิดต้นทาง</button>') +
+      '<button type="button" class="ghost" data-rw-delete="' + rwEscape(x.id) + '">ลบ</button></div></article>';
+  }).join("");
+  list.querySelectorAll("[data-rw-select]").forEach(cb => cb.addEventListener("change", () => {
+    const id=cb.dataset.rwSelect; rwSelectionOrder=rwSelectionOrder.filter(x=>x!==id); if(cb.checked)rwSelectionOrder.push(id);
+  }));
+  list.querySelectorAll("[data-rw-analyze]").forEach(b => b.onclick = () => {
+    const x = readAWriteItems().find(i => i.id === b.dataset.rwAnalyze);
+    if (!x || x.reviewOnly) return;
+    src.value = x.text; updateCount(); isExample = false; saveAnalysisSession(src.value); run();
+    $("t-analyze").click(); $("work").scrollIntoView({behavior:"smooth"});
+  });
+  list.querySelectorAll("[data-rw-review]").forEach(b => b.onclick = () => {
+    const x = readAWriteItems().find(i => i.id === b.dataset.rwReview);
+    if (!x) return;
+    src.value = x.text; updateCount(); isExample = false; saveAnalysisSession(src.value);
+    const quality = inspectTextQuality(src.value);
+    showQualityWarning(quality, "ฉบับที่เก็บไว้รอตรวจ · " + (x.qualityIssue || quality.issue || "ต้องตรวจทาน"));
+    $("t-analyze").click(); $("work").scrollIntoView({behavior:"smooth"});
+    const status = rwGet("rw-status");
+    if (status) status.textContent = "เปิดฉบับรอตรวจแล้ว ข้อความดิบยังอยู่ในคลังและไฟล์ส่งออก";
+  });
+  list.querySelectorAll("[data-rw-open]").forEach(b => b.onclick = () => {
+    const x = readAWriteItems().find(i => i.id === b.dataset.rwOpen);
+    if (x && x.kind !== "collection") window.open(x.sourceUrl, "_blank", "noopener");
+  });
+  list.querySelectorAll("[data-rw-delete]").forEach(b => b.onclick = () => {
+    const x = readAWriteItems().find(i => i.id === b.dataset.rwDelete);
+    if (x && confirm('ลบรายการ "' + x.chapterTitle + '" ออกจากคลังในเบราว์เซอร์นี้หรือไม่?')) {
+      localStorage.setItem(RW_IMPORT_KEY, JSON.stringify(readAWriteItems().filter(i => i.id !== x.id)));
+      renderReadAWriteLibrary();
+    }
+  });
 }
 rwGet("rw-merge-selected").onclick = () => {
   const status=rwGet("rw-status");
@@ -1537,13 +1643,15 @@ rwGet("rw-merge-selected").onclick = () => {
   // Respect the sequence in which the user checked the source pages; keep originals untouched.
   const byId=new Map(all.map(x=>[x.id,x]));
   const picked=ids.map(id=>byId.get(id)).filter(Boolean);
+  const reviewCount = picked.filter(x => x.reviewOnly).length;
+  if (reviewCount && reviewCount !== picked.length) { status.textContent = "แยกชุดที่รอตรวจออกจากข้อความที่อ่านได้ก่อน เพื่อไม่ให้ข้อความที่เสียหายปนในบทวิเคราะห์"; return; }
   const text=mergeLibraryTexts(picked);
   if(!text.trim()){status.textContent="รายการที่เลือกไม่มีข้อความให้นำมารวม";return;}
   const id="set-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,7);
   const title=prompt("ตั้งชื่อชุดรวม", "ชุดรวม "+picked.map(x=>x.chapterTitle).slice(0,3).join(" + "));
   if(title===null)return;
   const collection={
-    id,kind:"collection",sourceUrl:"novellens-collection://"+id,
+    id,kind:"collection",reviewOnly:reviewCount===picked.length,qualityIssue:reviewCount?"source-items-need-review":"",sourceUrl:"novellens-collection://"+id,
     storyUrl:"",pageTitle:"ชุดรวมจากคลัง",chapterTitle:title.trim()||"ชุดรวมจากคลัง",
     sourceIds:picked.map(x=>x.id),sourceUrls:picked.map(x=>x.sourceUrl),
     text,chars:text.length,captureCount:1,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()
