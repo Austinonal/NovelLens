@@ -10,7 +10,7 @@ const sample = main.match(/const SAMPLE_TEXT = (`[\s\S]*?`);/)[1];
 let netCalls = 0;
 const trip = () => { netCalls++; throw new Error("network call"); };
 const api = new Function("fetch", "XMLHttpRequest", "WebSocket", "EventSource", "navigator", engine + studio.split("// ===== Studio UI")[0] +
-  `;return {analyze, compare, count, generate, rollField, validate, similarity, storyText, inspectTextQuality, feelEvidence, classifyEvidence, LEAN, OPPOSITE, PLOTS, STRUCTURES, ENDINGS, SAMPLE_TEXT: ${sample}}`)(trip, trip, trip, trip, {sendBeacon: trip});
+  `;return {analyze, compare, count, generate, rollField, validate, similarity, storyText, inspectTextQuality, auditTextCompleteness, feelEvidence, classifyEvidence, LEAN, OPPOSITE, PLOTS, STRUCTURES, ENDINGS, SAMPLE_TEXT: ${sample}}`)(trip, trip, trip, trip, {sendBeacon: trip});
 
 // Analyzer
 const a = api.analyze(api.SAMPLE_TEXT);
@@ -36,6 +36,14 @@ assert.equal(api.generate({chars: [{}], plot: {}}), null, "needs at least one na
 
 // Input integrity and evidence checks
 assert(api.inspectTextQuality(api.SAMPLE_TEXT).ok, "readable Thai sample passes text quality guard");
+const qualityReport = api.auditTextCompleteness(api.SAMPLE_TEXT);
+assert(Number.isFinite(qualityReport.score) && qualityReport.score >= 0 && qualityReport.score <= 100, "input completeness audit returns a bounded score");
+assert(Array.isArray(qualityReport.warnings) && qualityReport.level, "input completeness audit returns explanatory warnings and a level");
+assert(api.analyze(api.SAMPLE_TEXT).quality.score === qualityReport.score, "analysis includes the same input quality report");
+assert(api.auditTextCompleteness("สั้นมาก").warnings.some(w => w.includes("สั้น")), "very short input is flagged for incomplete coverage");
+const repeatedLines = Array(8).fill("ประโยคยาวนี้เป็นข้อความตัวอย่างที่ซ้ำกันในหน้าต้นฉบับ").join("\n");
+assert(api.auditTextCompleteness(repeatedLines).duplicateLines > 0, "repeated long lines are detected");
+
 const protectedText = "ภาษาไทยที่มองเห็นได้ " + "\uE56A".repeat(24);
 const protectedResult = api.inspectTextQuality(protectedText);
 assert.equal(protectedResult.ok, false, "private-use font glyphs are rejected before analysis");
