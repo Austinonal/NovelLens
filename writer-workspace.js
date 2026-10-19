@@ -675,22 +675,119 @@
     searchCard.append(query.wrap,searchBtn,external,searchStatus,results);
     area.append(searchCard);
 
-    const sourceCard=card("เพิ่มหลายแหล่งพร้อมกัน","วาง URL หลายบรรทัดได้จากทุกเว็บไซต์ ระบบจะบันทึกลิงก์ให้ ส่วนเว็บที่ไม่เปิด CORS ต้องคัดข้อความสำคัญที่คุณมีสิทธิ์ใช้มาใส่เอง");
+    async function readReferencePage(rawUrl){
+      let u;
+      try{u=new URL(rawUrl);}catch(_){throw new Error("URL ไม่ถูกต้อง");}
+      if(!["https:","http:"].includes(u.protocol))throw new Error("รองรับเฉพาะ URL แบบ HTTP/HTTPS");
+      const controller=new AbortController();
+      const timeout=setTimeout(()=>controller.abort(),12000);
+      try{
+        const response=await fetch(u.href,{method:"GET",mode:"cors",credentials:"omit",redirect:"follow",signal:controller.signal});
+        if(!response.ok)throw new Error("เซิร์ฟเวอร์ตอบกลับ HTTP "+response.status);
+        const contentType=response.headers.get("content-type")||"";
+        if(!/(text\/html|application\/xhtml\+xml|text\/plain)/i.test(contentType))throw new Error("ปลายทางไม่ใช่หน้า HTML/ข้อความที่อ่านได้");
+        const announcedSize=Number(response.headers.get("content-length")||0);
+        if(announcedSize>2000000)throw new Error("หน้าเว็บใหญ่เกินขีดจำกัด 2 MB");
+        const rawText=await response.text();
+        if(rawText.length>2000000)throw new Error("หน้าเว็บใหญ่เกินขีดจำกัด 2 MB");
+        let title=u.hostname,content="";
+        if(/text\/plain/i.test(contentType)){
+          content=rawText;
+        }else{
+          const doc=new DOMParser().parseFromString(rawText,"text/html");
+          title=(doc.querySelector('meta[property="og:title"]')?.content||doc.title||u.hostname).trim();
+          doc.querySelectorAll("script,style,nav,footer,header,aside,form,iframe,noscript,svg,button,[aria-hidden='true'],.advertisement,.ads,.cookie,.breadcrumb").forEach(node=>node.remove());
+          const candidates=Array.from(doc.querySelectorAll("article,main,[role='main'],.article-body,.entry-content,.post-content"));
+          const candidateTexts=candidates.map(node=>String(node.textContent||"").trim()).filter(x=>x.length>0).sort((a,b)=>b.length-a.length);
+          content=candidateTexts[0]||(doc.body&&doc.body.textContent)||"";
+        }
+        content=String(content).replace(/\u00a0/g," ").replace(/[ \t]+/g," ").replace(/\n[ \t]+/g,"\n").replace(/\n{3,}/g,"\n\n").trim();
+        if(content.length<120)throw new Error("อ่านเนื้อหาหลักได้น้อยเกินไป อาจเป็นเว็บที่สร้างเนื้อหาด้วย JavaScript");
+        return {url:u.href,title:title||u.hostname,excerpt:content.slice(0,5000)};
+      }finally{clearTimeout(timeout);}
+    }
+    const sourceCard=card("เพิ่มหลายแหล่งพร้อมกัน","วาง URL หลายบรรทัดได้ ระบบจะลองดึงเนื้อหาจากเว็บที่อนุญาต CORS และบันทึกแหล่งที่อ่านไม่ได้ไว้ให้เติมสรุปเอง ไม่สามารถข้ามข้อจำกัดของทุกเว็บไซต์ได้");
     const urls=textareaField("URL อ้างอิง (หนึ่งลิงก์ต่อบรรทัด)","","","https://example.com/biography\nhttps://example.com/interview",4);
     const manualTitle=field("ชื่อชุดแหล่งอ้างอิง","",()=>{},{placeholder:"เช่น บุคลิกและบทสัมภาษณ์"});
-    const excerpt=textareaField("ข้อความสรุป/บันทึกจากแหล่งที่คุณตรวจแล้ว","","","จดประเด็นที่เห็นซ้ำหลายแหล่ง รวมทั้งข้อขัดแย้งที่ควรตรวจเพิ่ม",4);
-    sourceCard.append(urls.wrap,manualTitle.wrap,excerpt.wrap,btn("บันทึกแหล่งอ้างอิงทั้งหมด",()=>{
+    const excerpt=textareaField("ข้อความสรุป/บันทึกจากแหล่งที่คุณตรวจแล้ว","","","บันทึกเพิ่มเติมที่ต้องการแนบกับทุกแหล่ง หรือใช้แทนข้อความที่ดึงไม่ได้",4);
+    const fetchStatus=h("p","wr-muted","จำกัด 12 URL ต่อครั้ง · ส่งคำขอเฉพาะเมื่อกดปุ่ม · ถ้าเว็บบล็อก CORS ให้ใช้ลิงก์และสรุปที่คุณตรวจเอง");
+    const fetchSources=btn("ลองดึงข้อความจาก URL เหล่านี้",async()=>{
+      const rawLines=urls.node.value.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+      if(!rawLines.length){fetchStatus.textContent="วาง URL อย่างน้อยหนึ่งลิงก์ก่อน";return;}
+      if(rawLines.length>12){fetchStatus.textContent="มี "+rawLines.length+" URL · แบ่งทำครั้งละไม่เกิน 12 URL เพื่อไม่ให้เว็บค้าง";return;}
+      const valid=[],seen=new Set();let skipped=0;
+      for(const raw of rawLines){
+        try{
+          const u=new URL(raw);
+          if(!["https:","http:"].includes(u.protocol)){skipped++;continue;}
+          if(seen.has(u.href)){skipped++;continue;}
+          seen.add(u.href);valid.push({url:u.href,host:u.hostname});
+        }catch(_){skipped++;}
+      }
+      if(!valid.length){fetchStatus.textContent="ไม่พบ URL แบบ HTTP/HTTPS ที่ถูกต้อง";return;}
+      fetchSources.disabled=true;fetchSources.textContent="กำลังลองอ่านเว็บ…";
+      let completed=0;
+      fetchStatus.textContent="กำลังลองดึง 0/"+valid.length+" แหล่ง";
+      const userNotes=excerpt.node.value.trim();
+      const suppliedTitle=manualTitle.node.value.trim();
+      const results=await Promise.all(valid.map(async entry=>{
+        try{
+          const page=await readReferencePage(entry.url);
+          completed++;fetchStatus.textContent="กำลังลองดึง "+completed+"/"+valid.length+" แหล่ง";
+          return {entry,ok:true,page};
+        }catch(error){
+          completed++;fetchStatus.textContent="กำลังลองดึง "+completed+"/"+valid.length+" แหล่ง";
+          return {entry,ok:false,error:String(error&&error.name==="AbortError"?"หมดเวลารอ 12 วินาที":error&&error.message||"เบราว์เซอร์อ่านหน้านี้ไม่ได้")};
+        }
+      }));
+      let fetched=0,manual=0;
+      for(const result of results){
+        const entry=result.entry;
+        let saved=state.references.find(ref=>ref.url===entry.url);
+        const previousNotes=saved&&saved.notes?saved.notes:"";
+        if(!saved){
+          saved={id:id("reference"),title:suppliedTitle||entry.host,url:entry.url,source:entry.host,excerpt:"",notes:"",createdAt:new Date().toISOString()};
+          state.references.unshift(saved);
+        }
+        saved.title=result.ok?result.page.title:(saved.title||suppliedTitle||entry.host);
+        saved.source=entry.host;
+        if(result.ok){
+          saved.excerpt=result.page.excerpt;
+          saved.fetchStatus="fetched";fetched++;
+          const noteParts=[previousNotes,userNotes?"บันทึกจากผู้ใช้: "+userNotes:"","ดึงข้อความหน้าเว็บได้แล้ว · ควรตรวจชื่อ บุคลิก และข้อเท็จจริงกับต้นทาง"];
+          saved.notes=Array.from(new Set(noteParts.filter(Boolean))).join("\n");
+        }else{
+          if(!saved.excerpt&&userNotes)saved.excerpt=userNotes;
+          saved.fetchStatus="manual-required";manual++;
+          const noteParts=[previousNotes,"ดึงเนื้อหาอัตโนมัติไม่สำเร็จ: "+result.error+" · อาจเกิดจาก CORS, ระบบป้องกันบอต หรือเว็บต้องใช้ JavaScript"];
+          saved.notes=Array.from(new Set(noteParts.filter(Boolean))).join("\n");
+        }
+      }
+      save();
+      fetchSources.disabled=false;fetchSources.textContent="ลองดึงข้อความจาก URL เหล่านี้";
+      fetchStatus.textContent="เสร็จแล้ว · ดึงข้อความได้ "+fetched+" แหล่ง · ต้องเพิ่มสรุปเอง "+manual+" แหล่ง · URL ที่ข้าม "+skipped+" รายการ";
+      statusMessage="นำเข้าแหล่งอ้างอิง "+valid.length+" รายการแล้ว";render();
+    });
+    const saveLinks=btn("เก็บเฉพาะลิงก์ (ไม่ดึงหน้าเว็บ)",()=>{
       const linkLines=urls.node.value.split(/\n+/).map(x=>x.trim()).filter(Boolean);
       let added=0,skipped=0;
+      const userNotes=excerpt.node.value.trim();
       for(const raw of linkLines){
         try{
           const u=new URL(raw);
           if(!["https:","http:"].includes(u.protocol)){skipped++;continue;}
-          state.references.unshift({id:id("reference"),title:manualTitle.node.value.trim()||u.hostname,url:u.href,source:u.hostname,excerpt:excerpt.node.value.trim(),notes:"",createdAt:new Date().toISOString()});added++;
+          const existing=state.references.find(ref=>ref.url===u.href);
+          if(existing){
+            if(userNotes)existing.excerpt=userNotes;
+            if(!existing.title||existing.title===existing.url)existing.title=manualTitle.node.value.trim()||u.hostname;
+            added++;continue;
+          }
+          state.references.unshift({id:id("reference"),title:manualTitle.node.value.trim()||u.hostname,url:u.href,source:u.hostname,excerpt:userNotes,notes:"",fetchStatus:"manual-required",createdAt:new Date().toISOString()});added++;
         }catch(_){skipped++;}
       }
       save();statusMessage="บันทึก "+added+" แหล่ง · ข้าม "+skipped+" URL ที่ไม่ถูกต้อง";render();
-    }));
+    },"secondary");
+    sourceCard.append(urls.wrap,manualTitle.wrap,excerpt.wrap,fetchStatus,h("div","wr-inline",fetchSources,saveLinks));
     area.append(sourceCard);
 
     const saved=card("แหล่งอ้างอิงที่บันทึกไว้",String(state.references.length)+" รายการ · ลิงก์และบันทึกเก็บในเบราว์เซอร์");
