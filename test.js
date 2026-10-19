@@ -155,4 +155,11 @@ assert(txt.includes("จุดหักมุม") && txt.includes("เพรา
 assert(api.storyText({logline: "x", cast: [], links: [], outline: [], structure: "s"}).includes("x"), "old saved stories still export");
 assert.equal(netCalls, 0, "still no network calls");
 
+
+assert(html.includes("visible-page-text") && html.includes("selected-text"), "bookmarklet supports selection and visible DOM text capture");
+assert(html.includes("captureSelector") && html.includes("capturedLength"), "bookmarklet records capture diagnostics");
+assert(html.includes("reviewOnly") && html.includes("data-rw-review"), "unreadable captures are preserved as review-only entries");
+assert(html.includes('id="rw-import-json"') && html.includes("นำเข้าเสร็จ"), "library supports restoring a JSON backup");
+assert(html.includes("แยกชุดที่รอตรวจออกจากข้อความที่อ่านได้ก่อน"), "review-only text cannot be mixed with readable text for analysis");
+
 console.log("all checks passed");
