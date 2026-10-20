@@ -230,6 +230,21 @@ assert(blendedWriterCharacter.name.includes("มิน") && blendedWriterCharact
 assert(blendedWriterCharacter.traits.includes("ช่างสังเกต") && blendedWriterCharacter.traits.includes("ตลกร้าย"), "character blend combines traits");
 const readiness = writerUtils.evaluatePlan(writerProject, writerCharacters);
 assert(readiness.score >= 0 && readiness.score <= 100 && readiness.checklist.length >= 5, "planner readiness score is bounded and includes a checklist");
+const continuityProbe = {
+  ...writerProject,
+  selectedCharacterIds: ["wr-a","wr-b"],
+  chapters: [
+    {goal:"เริ่ม",scene:"พบจดหมาย",conflict:"ใครส่ง",clue:"หมึกไม่แห้ง",twist:"ผู้ส่งอยู่ในห้อง",hook:"ตามหาหมึก",cast:["มิน"],mood:"ลึกลับ",tension:3},
+    {goal:"ตามหา",scene:"ตรวจหมึก",conflict:"ข้อมูลขัดกัน",clue:"ตราประทับ",twist:"",hook:"พบผู้ต้องสงสัย",cast:["มิน"],mood:"ลึกลับ",tension:5},
+    {goal:"เผชิญหน้า",scene:"พบผู้ต้องสงสัย",conflict:"ปกป้องความลับ",clue:"",twist:"",hook:"คำสารภาพ",cast:["เรน"],mood:"ลึกลับ",tension:8},
+    {goal:"เฉลย",scene:"เปิดจดหมาย",conflict:"เลือกความจริง",clue:"",twist:"",hook:"ปิดเรื่อง",cast:["มิน"],mood:"ลึกลับ",tension:7}
+  ]
+};
+const continuityWarnings = writerUtils.continuityFindings(continuityProbe);
+assert(continuityWarnings.some(x=>x.includes("เบาะแส")), "continuity audit checks whether twists are seeded");
+assert(continuityWarnings.some(x=>x.includes("เปลี่ยนตัวละคร")), "continuity audit flags abrupt cast changes without a note");
+assert(continuityWarnings.some(x=>x.includes("Mood เหมือนกัน")), "continuity audit spots a flat mood sequence");
+assert(continuityWarnings.some(x=>x.includes("ยังไม่ปรากฏ")), "continuity audit checks selected characters against chapter cast lists");
 const writerSchedule = writerUtils.buildSchedule(writerProject);
 assert.equal(writerSchedule.sessionCount, 10, "writing schedule respects chosen weekdays and date range");
 assert.equal(writerSchedule.schedule.reduce((n,item)=>n+item.targetWords,0), writerProject.targetWords, "daily word goals sum to the planned book target");
