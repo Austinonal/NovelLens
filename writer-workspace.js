@@ -399,7 +399,7 @@
       }
     };
   }
-  const UTILS={buildChapterPlan:buildChapterPlan,evaluatePlan:evaluatePlan,buildSchedule:buildSchedule,continuityFindings:continuityFindings,createBlend:createBlend,analyzeReferenceText:analyzeReferenceText,parseUrlList:parseUrlList,wikiApiUrl:wikiApiUrl,characterFromSource:characterFromSource,normalizeDate:todayISO};
+  const UTILS={buildChapterPlan:buildChapterPlan,evaluatePlan:evaluatePlan,buildSchedule:buildSchedule,continuityFindings:continuityFindings,buildMysteryBoard:buildMysteryBoard,createBlend:createBlend,analyzeReferenceText:analyzeReferenceText,parseUrlList:parseUrlList,wikiApiUrl:wikiApiUrl,characterFromSource:characterFromSource,normalizeDate:todayISO};
   if (typeof module === "object" && module.exports) module.exports=UTILS;
   if (typeof document === "undefined") return;
   const $=id=>document.getElementById(id);
@@ -1129,6 +1129,7 @@
   }
   function renderChapters(area,p){
     const box=card("Planner รายตอน",p.chapters.length+" ตอน · เป้าหมาย "+Number(p.targetWords||0).toLocaleString()+" คำทั้งเรื่อง");
+    box.append(renderMysteryBoard(p));
     const graph=h("div","wr-graph-wrap");graph.id="wr-arc-graph";box.append(graph);drawGraph(graph,p);
     const continuity=h("div","wr-continuity");
     const findings=continuityFindings(p,state.characters);
@@ -1253,6 +1254,102 @@
     }
     if(chapters.every(c=>!clean(c.conflict)&&!clean(c.scene)))findings.push("ทุกตอนยังขาดเหตุการณ์/ความขัดแย้ง จึงประเมินความต่อเนื่องได้จำกัด");
     return unique(findings).slice(0,18);
+  }
+  function buildMysteryBoard(project){
+    const chapters=Array.isArray(project&&project.chapters)?project.chapters:[];
+    const clean=value=>String(value||"").trim();
+    const clues=chapters.map((chapter,index)=>({
+      chapterNumber:index+1,
+      title:clean(chapter.title)||"ตอนที่ "+(index+1),
+      text:clean(chapter.clue)
+    })).filter(item=>item.text);
+    const timeline=chapters.map((chapter,index)=>{
+      const number=index+1, clue=clean(chapter.clue), twist=clean(chapter.twist);
+      const previousClues=clues.filter(item=>item.chapterNumber<number);
+      const hasLaterTwist=chapters.slice(index+1).some(next=>clean(next.twist));
+      let setupStatus="none";
+      if(twist){
+        if(previousClues.length)setupStatus="prior";
+        else if(clue)setupStatus="same";
+        else setupStatus="missing";
+      }else if(clue)setupStatus="clue";
+      return {
+        chapterNumber:number,
+        title:clean(chapter.title)||"ตอนที่ "+number,
+        clue:clue,
+        twist:twist,
+        setupStatus:setupStatus,
+        possibleClueNumbers:previousClues.map(item=>item.chapterNumber),
+        hasLaterTwist:hasLaterTwist
+      };
+    });
+    return {
+      chapterCount:chapters.length,
+      clueCount:clues.length,
+      twistCount:timeline.filter(item=>item.twist).length,
+      twistsWithoutSetup:timeline.filter(item=>item.setupStatus==="missing").length,
+      cluesWithoutLaterTwist:timeline.filter(item=>item.clue&&!item.hasLaterTwist).length,
+      timeline:timeline
+    };
+  }
+  function renderMysteryBoard(project){
+    const data=buildMysteryBoard(project);
+    const details=h("details","wr-mystery-board");
+    const summary=h("summary","wr-mystery-summary");
+    const title=h("span","wr-mystery-heading");
+    add(title,h("strong","","กระดานเบาะแสและจุดหักมุม"),h("small","","ดูตำแหน่งข้อมูลสำคัญทั้งเรื่องในมุมเดียว"));
+    const stats=h("span","wr-mystery-stats");
+    add(stats,
+      h("span","wr-badge info","เบาะแส "+data.clueCount),
+      h("span","wr-badge","Twist "+data.twistCount),
+      h("span","wr-badge "+(data.twistsWithoutSetup?"":"info"),"ยังไม่พบเบาะแส "+data.twistsWithoutSetup)
+    );
+    add(summary,title,stats);details.append(summary);
+    if(!data.chapterCount){
+      details.append(h("p","wr-empty","สร้างแผนรายตอนก่อน กระดานนี้จะแสดงเบาะแสและจุดหักมุมที่กรอกไว้"));
+      return details;
+    }
+    details.append(h("p","wr-muted wr-mystery-note","นี่คือภาพรวมจากช่องเบาะแสและ Twist ในแต่ละตอน รายการเบาะแสก่อนหน้าเป็นเพียงตัวเลือกที่ควรตรวจ ไม่ได้ยืนยันว่าเป็นเบาะแสที่เฉลย Twist นั้น"));
+    if(!data.clueCount&&!data.twistCount){
+      details.append(h("p","wr-empty","ยังไม่มีเบาะแสหรือจุดหักมุมในแผน ลองกรอกช่องเหล่านี้ในรายละเอียดตอน"));
+      return details;
+    }
+    const timeline=h("div","wr-mystery-timeline");
+    for(const item of data.timeline){
+      const row=h("article","wr-mystery-row");
+      const head=h("div","wr-mystery-row-head");
+      add(head,h("span","wr-chapter-num",String(item.chapterNumber).padStart(2,"0")),h("strong","",item.title));
+      row.append(head);
+      const pair=h("div","wr-mystery-pair");
+      const clueBox=h("div","wr-mystery-item");
+      add(clueBox,h("span","wr-mystery-label","เบาะแส"),h("p","",item.clue||"ยังไม่ได้ระบุเบาะแส"));
+      const twistBox=h("div","wr-mystery-item");
+      add(twistBox,h("span","wr-mystery-label","Plot twist"),h("p","",item.twist||"ยังไม่ได้ระบุจุดหักมุม"));
+      add(pair,clueBox,twistBox);row.append(pair);
+      let message="",kind="neutral";
+      if(item.setupStatus==="prior"){
+        message="พบเบาะแสก่อนหน้าในตอน "+item.possibleClueNumbers.join(", ")+" — ตรวจเองว่าเชื่อมกับ Twist นี้จริงหรือไม่";
+        kind="ready";
+      }else if(item.setupStatus==="same"){
+        message="มีเบาะแสในตอนเดียวกัน — ตรวจว่าผู้อ่านได้รับข้อมูลก่อนจุดเฉลย";
+        kind="review";
+      }else if(item.setupStatus==="missing"){
+        message="ยังไม่พบเบาะแสในตอนก่อนหน้าหรือตอนนี้";
+        kind="missing";
+      }else if(item.clue&&item.hasLaterTwist){
+        message="มี Twist ในตอนหลัง — ตรวจว่าเบาะแสนี้ควรส่งผลต่อเหตุการณ์ใด";
+        kind="review";
+      }else if(item.clue){
+        message="ยังไม่พบ Twist ในตอนหลังของแผน — ตรวจว่าเบาะแสนี้ต้องมีผลเฉลยภายหลังหรือไม่";
+        kind="review";
+      }else{
+        message="ยังไม่มีเบาะแสหรือ Twist ในตอนนี้";
+      }
+      row.append(h("p","wr-mystery-status "+kind,message));
+      timeline.append(row);
+    }
+    details.append(timeline);
+    return details;
   }
   function renderSchedulePreview(area,p){
     const box=card("วางตารางเขียนจนถึงวันส่ง","ระบบจะคำนวณตามช่วงวันที่และวันเขียนที่คุณเลือก แต่จะยังไม่เพิ่มงานในปฏิทินจนกว่าคุณจะกดยืนยัน");
