@@ -1131,7 +1131,7 @@
     const box=card("Planner รายตอน",p.chapters.length+" ตอน · เป้าหมาย "+Number(p.targetWords||0).toLocaleString()+" คำทั้งเรื่อง");
     const graph=h("div","wr-graph-wrap");graph.id="wr-arc-graph";box.append(graph);drawGraph(graph,p);
     const continuity=h("div","wr-continuity");
-    const findings=continuityFindings(p);
+    const findings=continuityFindings(p,state.characters);
     add(continuity,h("strong","","จุดเชื่อม/ความต่อเนื่องที่ควรตรวจ"),findings.length?h("ul","",...findings.map(x=>h("li","",x))):h("p","wr-muted","ยังไม่พบสัญญาณเตือนจากกฎพื้นฐาน แต่ควรตรวจเหตุและผลด้วยตัวเอง"));
     box.append(continuity);
     for(let index=0;index<p.chapters.length;index++){
@@ -1212,13 +1212,13 @@
     host.append(svg);
     const legend=h("div","wr-graph-legend");add(legend,h("span","","● แรงกดดัน 1–10"),h("span","","◆ จุดที่มีข้อความ twist"));host.append(legend);
   }
-  function continuityFindings(p){
+  function continuityFindings(p,characterLibrary){
     const chapters=Array.isArray(p&&p.chapters)?p.chapters:[],findings=[];
     if(!chapters.length)return ["สร้างแผนรายตอนก่อน"];
     const clean=value=>String(value||"").trim();
     const twistAt=chapters.map((c,i)=>clean(c.twist)?i:-1).filter(i=>i>=0);
     const castNames=unique((Array.isArray(p.selectedCharacterIds)?p.selectedCharacterIds:[])
-      .map(id=>state.characters.find(c=>c.id===id)).filter(Boolean).map(c=>clean(c.name)).filter(Boolean));
+      .map(id=>(Array.isArray(characterLibrary)?characterLibrary:[]).find(c=>c.id===id)).filter(Boolean).map(c=>clean(c.name)).filter(Boolean));
     const appearing=new Set(chapters.flatMap(c=>(Array.isArray(c.cast)?c.cast:splitList(c.cast)).map(clean).filter(Boolean)));
     if(!clean(chapters[0].goal))findings.push("ตอนต้นยังไม่มีเป้าหมายที่ชัด");
     if(!clean(chapters[0].scene))findings.push("ตอนแรกยังไม่มีฉากเปิดที่ทำให้เรื่องเริ่มเคลื่อนไหว");
