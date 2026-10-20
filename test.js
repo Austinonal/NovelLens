@@ -201,7 +201,8 @@ assert(html.includes("แยกชุดที่รอตรวจออกจ�
 
 const writerCharacters = [
   {id:"wr-a",name:"มิน",role:"ตัวเอก",traits:"ช่างสังเกต, รอบคอบ",desire:"ตามหาความจริง",fear:"ถูกทอดทิ้ง",secret:"จำอดีตไม่ได้",backstory:"เติบโตมากับแม่",strengths:"จำรายละเอียด"},
-  {id:"wr-b",name:"เรน",role:"คู่ขัดแย้ง",traits:"ตลกร้าย, ช่างสงสัย",desire:"ปกป้องพี่สาว",fear:"เสียอิสระ",secret:"รู้ว่าใครส่งจดหมาย",backstory:"เคยโกหก",strengths:"อ่านคนเก่ง"}
+  {id:"wr-b",name:"เรน",role:"คู่ขัดแย้ง",traits:"ตลกร้าย, ช่างสงสัย",desire:"ปกป้องพี่สาว",fear:"เสียอิสระ",secret:"รู้ว่าใครส่งจดหมาย",backstory:"เคยโกหก",strengths:"อ่านคนเก่ง"},
+  {id:"wr-c",name:"อิง",role:"พยาน",traits:"ใจเย็น",desire:"ปกป้องครอบครัว",fear:"ความขัดแย้ง",secret:"เห็นเหตุการณ์",backstory:"เพื่อนเก่า",strengths:"จำสถานที่"}
 ];
 const writerProject = {
   id:"wr-project",title:"บททดสอบ",mode:"standalone",chapterCount:12,genre:"ลึกลับ",
@@ -232,12 +233,13 @@ const readiness = writerUtils.evaluatePlan(writerProject, writerCharacters);
 assert(readiness.score >= 0 && readiness.score <= 100 && readiness.checklist.length >= 5, "planner readiness score is bounded and includes a checklist");
 const continuityProbe = {
   ...writerProject,
-  selectedCharacterIds: ["wr-a","wr-b"],
+  selectedCharacterIds: ["wr-a","wr-b","wr-c"],
   chapters: [
-    {goal:"เริ่ม",scene:"พบจดหมาย",conflict:"ใครส่ง",clue:"หมึกไม่แห้ง",twist:"ผู้ส่งอยู่ในห้อง",hook:"ตามหาหมึก",cast:["มิน"],mood:"ลึกลับ",tension:3},
+    {goal:"เริ่ม",scene:"พบจดหมาย",conflict:"ใครส่ง",clue:"",twist:"ผู้ส่งอยู่ในห้อง",hook:"ตามหาหมึก",cast:["มิน"],mood:"ลึกลับ",tension:3},
     {goal:"ตามหา",scene:"ตรวจหมึก",conflict:"ข้อมูลขัดกัน",clue:"ตราประทับ",twist:"",hook:"พบผู้ต้องสงสัย",cast:["มิน"],mood:"ลึกลับ",tension:5},
     {goal:"เผชิญหน้า",scene:"พบผู้ต้องสงสัย",conflict:"ปกป้องความลับ",clue:"",twist:"",hook:"คำสารภาพ",cast:["เรน"],mood:"ลึกลับ",tension:8},
-    {goal:"เฉลย",scene:"เปิดจดหมาย",conflict:"เลือกความจริง",clue:"",twist:"",hook:"ปิดเรื่อง",cast:["มิน"],mood:"ลึกลับ",tension:7}
+    {goal:"เฉลย",scene:"เปิดจดหมาย",conflict:"เลือกความจริง",clue:"",twist:"",hook:"ปิดเรื่อง",cast:["มิน"],mood:"ลึกลับ",tension:7},
+    {goal:"ปิดท้าย",scene:"มินเก็บจดหมาย",conflict:"เก็บความจริงไว้หรือเปิดเผย",clue:"",twist:"",hook:"จบบริบูรณ์",cast:["มิน"],mood:"ลึกลับ",tension:2}
   ]
 };
 const continuityWarnings = writerUtils.continuityFindings(continuityProbe, writerCharacters);
