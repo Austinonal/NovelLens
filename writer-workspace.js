@@ -399,7 +399,7 @@
       }
     };
   }
-  const UTILS={buildChapterPlan:buildChapterPlan,evaluatePlan:evaluatePlan,buildSchedule:buildSchedule,createBlend:createBlend,analyzeReferenceText:analyzeReferenceText,parseUrlList:parseUrlList,wikiApiUrl:wikiApiUrl,characterFromSource:characterFromSource,normalizeDate:todayISO};
+  const UTILS={buildChapterPlan:buildChapterPlan,evaluatePlan:evaluatePlan,buildSchedule:buildSchedule,continuityFindings:continuityFindings,createBlend:createBlend,analyzeReferenceText:analyzeReferenceText,parseUrlList:parseUrlList,wikiApiUrl:wikiApiUrl,characterFromSource:characterFromSource,normalizeDate:todayISO};
   if (typeof module === "object" && module.exports) module.exports=UTILS;
   if (typeof document === "undefined") return;
   const $=id=>document.getElementById(id);
@@ -1131,7 +1131,7 @@
     const box=card("Planner รายตอน",p.chapters.length+" ตอน · เป้าหมาย "+Number(p.targetWords||0).toLocaleString()+" คำทั้งเรื่อง");
     const graph=h("div","wr-graph-wrap");graph.id="wr-arc-graph";box.append(graph);drawGraph(graph,p);
     const continuity=h("div","wr-continuity");
-    const findings=continuityFindings(p);
+    const findings=continuityFindings(p,state.characters);
     add(continuity,h("strong","","จุดเชื่อม/ความต่อเนื่องที่ควรตรวจ"),findings.length?h("ul","",...findings.map(x=>h("li","",x))):h("p","wr-muted","ยังไม่พบสัญญาณเตือนจากกฎพื้นฐาน แต่ควรตรวจเหตุและผลด้วยตัวเอง"));
     box.append(continuity);
     for(let index=0;index<p.chapters.length;index++){
@@ -1212,22 +1212,47 @@
     host.append(svg);
     const legend=h("div","wr-graph-legend");add(legend,h("span","","● แรงกดดัน 1–10"),h("span","","◆ จุดที่มีข้อความ twist"));host.append(legend);
   }
-  function continuityFindings(p){
-    const chapters=p.chapters||[],findings=[];
+  function continuityFindings(p,characterLibrary){
+    const chapters=Array.isArray(p&&p.chapters)?p.chapters:[],findings=[];
     if(!chapters.length)return ["สร้างแผนรายตอนก่อน"];
-    if(!chapters[0].goal)findings.push("ตอนต้นยังไม่มีเป้าหมายที่ชัด");
-    const twistAt=chapters.map((c,i)=>c.twist?i:-1).filter(i=>i>=0);
+    const clean=value=>String(value||"").trim();
+    const twistAt=chapters.map((c,i)=>clean(c.twist)?i:-1).filter(i=>i>=0);
+    const castNames=unique((Array.isArray(p.selectedCharacterIds)?p.selectedCharacterIds:[])
+      .map(id=>(Array.isArray(characterLibrary)?characterLibrary:[]).find(c=>c.id===id)).filter(Boolean).map(c=>clean(c.name)).filter(Boolean));
+    const appearing=new Set(chapters.flatMap(c=>(Array.isArray(c.cast)?c.cast:splitList(c.cast)).map(clean).filter(Boolean)));
+    if(!clean(chapters[0].goal))findings.push("ตอนต้นยังไม่มีเป้าหมายที่ชัด");
+    if(!clean(chapters[0].scene))findings.push("ตอนแรกยังไม่มีฉากเปิดที่ทำให้เรื่องเริ่มเคลื่อนไหว");
     for(const index of twistAt){
-      if(index>0&&!chapters.slice(0,index).some(c=>String(c.clue||"").trim()))findings.push("ตอน "+(index+1)+" มี twist แต่ยังไม่พบช่องเบาะแสที่กรอกในตอนก่อนหน้า");
+      const before=chapters.slice(0,index).some(c=>clean(c.clue));
+      if(index===0&&!clean(chapters[index].clue))findings.push("ตอนที่ 1 มี twist ทันที แต่ยังไม่มีเบาะแสในตอนเดียวกันให้ผู้อ่านย้อนกลับมาตรวจ");
+      else if(index>0&&!before&&!clean(chapters[index].clue))findings.push("ตอน "+(index+1)+" มี twist แต่ไม่พบเบาะแสที่ปูก่อนหรือระบุไว้ในตอนเดียวกัน");
+      else if(index>0&&!before&&clean(chapters[index].clue))findings.push("ตอน "+(index+1)+" มี twist และเบาะแสอยู่ในตอนเดียวกัน แต่ควรตรวจว่ามีการปูข้อมูลก่อนถึงจุดเฉลยหรือไม่");
     }
     for(let i=0;i<chapters.length;i++){
-      if(!chapters[i].hook&&i<chapters.length-1)findings.push("ตอน "+(i+1)+" ยังไม่มี hook หรือผลที่ดันไปตอนต่อไป");
-      if(i>0&&chapters[i].goal&&!chapters[i-1].conflict&&!chapters[i-1].scene)findings.push("เชื่อมตอน "+i+" → "+(i+1)+": ตอนก่อนหน้ายังไม่ระบุผลที่ส่งต่อมา");
+      const c=chapters[i];
+      if(!clean(c.scene))findings.push("ตอน "+(i+1)+" ยังไม่มีเหตุการณ์หลัก");
+      if(!clean(c.conflict))findings.push("ตอน "+(i+1)+" ยังไม่ระบุแรงต้านหรือต้นทุนของการเลือก");
+      if(i<chapters.length-1&&!clean(c.hook))findings.push("ตอน "+(i+1)+" ยังไม่มี hook หรือผลที่พาไปตอนถัดไป");
+      if(i>0&&clean(c.goal)&&!clean(chapters[i-1].conflict)&&!clean(chapters[i-1].scene))findings.push("เชื่อมตอน "+i+" → "+(i+1)+": ตอนก่อนหน้ายังไม่ระบุเหตุการณ์หรือผลที่ส่งต่อมา");
+      if(i>0&&clean(c.cast).length){
+        const current=Array.isArray(c.cast)?c.cast:splitList(c.cast);
+        const prev=Array.isArray(chapters[i-1].cast)?chapters[i-1].cast:splitList(chapters[i-1].cast);
+        if(current.length&&prev.length&&!current.some(name=>prev.includes(name))&&!clean(c.note))findings.push("ตอน "+(i+1)+" เปลี่ยนตัวละครที่ปรากฏจากตอนก่อนทั้งหมด แต่ยังไม่มีบันทึกอธิบายการเปลี่ยนฉากหรือเส้นเรื่อง");
+      }
     }
-    if(!chapters[chapters.length-1].hook)findings.push("ตอนสุดท้ายยังไม่มีบทสรุป/คำถามปิดเรื่อง");
-    if(twistAt.length===0)findings.push("ยังไม่ได้ระบุจุดหักมุม ให้เลือกจุดเปลี่ยนที่มาจากเบาะแส ไม่ใช่ข้อมูลที่เพิ่งโผล่");
-    if(chapters.every(c=>!c.conflict&&!c.scene))findings.push("ทุกตอนยังขาดเหตุการณ์/ความขัดแย้ง จึงประเมินความต่อเนื่องได้จำกัด");
-    return unique(findings).slice(0,12);
+    if(!clean(chapters[chapters.length-1].hook))findings.push("ตอนสุดท้ายยังไม่มีบทสรุปหรือคำถามปิดเรื่อง");
+    if(!twistAt.length)findings.push("ยังไม่ได้ระบุจุดหักมุม ให้พิจารณาว่าจุดเปลี่ยนมีเบาะแสรองรับหรือไม่");
+    if(chapters.length>=4&&twistAt.length===1)findings.push("มี twist เพียงจุดเดียวในเรื่อง "+chapters.length+" ตอน ตรวจว่าความเข้มข้นช่วงกลางเรื่องต้องการจุดเปลี่ยนย่อยเพิ่มหรือไม่");
+    const peak=chapters.reduce((best,c,i)=>Number(c.tension||0)>Number(chapters[best].tension||0)?i:best,0);
+    if(chapters.length>=4&&peak<chapters.length*0.55)findings.push("จุดแรงกดดันสูงสุดอยู่ช่วงต้น/กลางเรื่อง (ตอน "+(peak+1)+") ตรวจว่าช่วงท้ายยังไต่ระดับไปสู่ไคลแมกซ์หรือไม่");
+    const moods=chapters.map(c=>clean(c.mood)).filter(Boolean);
+    if(chapters.length>=5&&moods.length===chapters.length&&new Set(moods).size===1)findings.push("Mood เหมือนกันทุกตอน อาจลองเปลี่ยนจังหวะอารมณ์เพื่อให้เรื่องมีความต่าง");
+    if(castNames.length){
+      const missing=castNames.filter(name=>!appearing.has(name));
+      if(missing.length)findings.push("ตัวละครที่เลือกไว้แต่ยังไม่ปรากฏในช่องตัวละครรายตอน: "+missing.join(", "));
+    }
+    if(chapters.every(c=>!clean(c.conflict)&&!clean(c.scene)))findings.push("ทุกตอนยังขาดเหตุการณ์/ความขัดแย้ง จึงประเมินความต่อเนื่องได้จำกัด");
+    return unique(findings).slice(0,18);
   }
   function renderSchedulePreview(area,p){
     const box=card("วางตารางเขียนจนถึงวันส่ง","ระบบจะคำนวณตามช่วงวันที่และวันเขียนที่คุณเลือก แต่จะยังไม่เพิ่มงานในปฏิทินจนกว่าคุณจะกดยืนยัน");
