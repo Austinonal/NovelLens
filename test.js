@@ -240,7 +240,7 @@ const continuityProbe = {
     {goal:"เฉลย",scene:"เปิดจดหมาย",conflict:"เลือกความจริง",clue:"",twist:"",hook:"ปิดเรื่อง",cast:["มิน"],mood:"ลึกลับ",tension:7}
   ]
 };
-const continuityWarnings = writerUtils.continuityFindings(continuityProbe);
+const continuityWarnings = writerUtils.continuityFindings(continuityProbe, writerCharacters);
 assert(continuityWarnings.some(x=>x.includes("เบาะแส")), "continuity audit checks whether twists are seeded");
 assert(continuityWarnings.some(x=>x.includes("เปลี่ยนตัวละคร")), "continuity audit flags abrupt cast changes without a note");
 assert(continuityWarnings.some(x=>x.includes("Mood เหมือนกัน")), "continuity audit spots a flat mood sequence");
