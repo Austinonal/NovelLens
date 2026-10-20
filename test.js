@@ -246,6 +246,17 @@ assert(continuityWarnings.some(x=>x.includes("เบาะแส")), "continuity
 assert(continuityWarnings.some(x=>x.includes("เปลี่ยนตัวละคร")), "continuity audit flags abrupt cast changes without a note");
 assert(continuityWarnings.some(x=>x.includes("Mood เหมือนกัน")), "continuity audit spots a flat mood sequence");
 assert(continuityWarnings.some(x=>x.includes("ยังไม่ปรากฏ")), "continuity audit checks selected characters against chapter cast lists");
+const mysteryBoardCheck = writerUtils.buildMysteryBoard({chapters:[
+  {title:"ภาพเปิด",clue:"",twist:"ตัวเอกอยู่ในความทรงจำปลอม"},
+  {title:"ร่องรอย",clue:"ตราประทับสีเงิน",twist:""},
+  {title:"จดหมาย",clue:"",twist:"ผู้ส่งคือเพื่อนเก่า"}
+]});
+assert.equal(mysteryBoardCheck.clueCount, 1, "mystery board counts chapter clues");
+assert.equal(mysteryBoardCheck.twistCount, 2, "mystery board counts twists");
+assert.equal(mysteryBoardCheck.twistsWithoutSetup, 1, "mystery board flags a twist with no earlier or same-chapter clue");
+assert.equal(mysteryBoardCheck.timeline[0].setupStatus, "missing", "unseeded twists are marked for review");
+assert.equal(mysteryBoardCheck.timeline[2].setupStatus, "prior", "twists can surface possible earlier clues for manual review");
+assert(mysteryBoardCheck.timeline[2].possibleClueNumbers.includes(2), "mystery board gives candidate clue chapter numbers without claiming an exact link");
 const writerSchedule = writerUtils.buildSchedule(writerProject);
 assert.equal(writerSchedule.sessionCount, 10, "writing schedule respects chosen weekdays and date range");
 assert.equal(writerSchedule.schedule.reduce((n,item)=>n+item.targetWords,0), writerProject.targetWords, "daily word goals sum to the planned book target");
