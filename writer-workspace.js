@@ -399,7 +399,7 @@
       }
     };
   }
-  const UTILS={buildChapterPlan:buildChapterPlan,evaluatePlan:evaluatePlan,buildSchedule:buildSchedule,createBlend:createBlend,analyzeReferenceText:analyzeReferenceText,parseUrlList:parseUrlList,wikiApiUrl:wikiApiUrl,characterFromSource:characterFromSource,normalizeDate:todayISO};
+  const UTILS={buildChapterPlan:buildChapterPlan,evaluatePlan:evaluatePlan,buildSchedule:buildSchedule,continuityFindings:continuityFindings,createBlend:createBlend,analyzeReferenceText:analyzeReferenceText,parseUrlList:parseUrlList,wikiApiUrl:wikiApiUrl,characterFromSource:characterFromSource,normalizeDate:todayISO};
   if (typeof module === "object" && module.exports) module.exports=UTILS;
   if (typeof document === "undefined") return;
   const $=id=>document.getElementById(id);
