@@ -201,8 +201,7 @@ assert(html.includes("แยกชุดที่รอตรวจออกจ�
 
 const writerCharacters = [
   {id:"wr-a",name:"มิน",role:"ตัวเอก",traits:"ช่างสังเกต, รอบคอบ",desire:"ตามหาความจริง",fear:"ถูกทอดทิ้ง",secret:"จำอดีตไม่ได้",backstory:"เติบโตมากับแม่",strengths:"จำรายละเอียด"},
-  {id:"wr-b",name:"เรน",role:"คู่ขัดแย้ง",traits:"ตลกร้าย, ช่างสงสัย",desire:"ปกป้องพี่สาว",fear:"เสียอิสระ",secret:"รู้ว่าใครส่งจดหมาย",backstory:"เคยโกหก",strengths:"อ่านคนเก่ง"},
-  {id:"wr-c",name:"อิง",role:"พยาน",traits:"ใจเย็น",desire:"ปกป้องครอบครัว",fear:"ความขัดแย้ง",secret:"เห็นเหตุการณ์",backstory:"เพื่อนเก่า",strengths:"จำสถานที่"}
+  {id:"wr-b",name:"เรน",role:"คู่ขัดแย้ง",traits:"ตลกร้าย, ช่างสงสัย",desire:"ปกป้องพี่สาว",fear:"เสียอิสระ",secret:"รู้ว่าใครส่งจดหมาย",backstory:"เคยโกหก",strengths:"อ่านคนเก่ง"}
 ];
 const writerProject = {
   id:"wr-project",title:"บททดสอบ",mode:"standalone",chapterCount:12,genre:"ลึกลับ",
@@ -242,7 +241,7 @@ const continuityProbe = {
     {goal:"ปิดท้าย",scene:"มินเก็บจดหมาย",conflict:"เก็บความจริงไว้หรือเปิดเผย",clue:"",twist:"",hook:"จบบริบูรณ์",cast:["มิน"],mood:"ลึกลับ",tension:2}
   ]
 };
-const continuityWarnings = writerUtils.continuityFindings(continuityProbe, writerCharacters);
+const continuityWarnings = writerUtils.continuityFindings(continuityProbe, writerCharacters.concat([{id:"wr-c",name:"อิง"}]));
 assert(continuityWarnings.some(x=>x.includes("เบาะแส")), "continuity audit checks whether twists are seeded");
 assert(continuityWarnings.some(x=>x.includes("เปลี่ยนตัวละคร")), "continuity audit flags abrupt cast changes without a note");
 assert(continuityWarnings.some(x=>x.includes("Mood เหมือนกัน")), "continuity audit spots a flat mood sequence");
